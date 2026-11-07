@@ -2,7 +2,7 @@ import 'dotenv/config';
 import bridgeRouter from './bridge.js';
 import googleAuthRouter from './google-auth.js';
 import express from 'express';import helmet from 'helmet';import rateLimit from 'express-rate-limit';import multer from 'multer';import ffmpegPath from 'ffmpeg-static';import{spawn}from'node:child_process';import{mkdtemp,readFile,rm,stat}from'node:fs/promises';import{tmpdir}from'node:os';import path from'node:path';import crypto from'node:crypto';import{fileURLToPath}from'node:url';
-const app=express();app.disable('x-powered-by');app.use(helmet({contentSecurityPolicy:false}));const production=process.env.NODE_ENV==='production';if(production)app.set('trust proxy',1);
+const app=express();app.disable('x-powered-by');app.use(helmet({contentSecurityPolicy:false,referrerPolicy:{policy:'strict-origin-when-cross-origin'}}));const production=process.env.NODE_ENV==='production';if(production)app.set('trust proxy',1);
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:150*1024*1024,files:1},fileFilter:(req,file,cb)=>{if(!/^(video|audio)\//.test(file.mimetype))return cb(new Error('Only video or audio uploads are supported'));cb(null,true)}});
 const limiter=rateLimit({windowMs:15*60*1000,limit:10,standardHeaders:'draft-7',legacyHeaders:false});
 function authorized(code){const expected=process.env.TRANSCRIPTION_ACCESS_CODE||'';if(expected.length<16||typeof code!=='string')return false;const a=crypto.createHash('sha256').update(code).digest();const b=crypto.createHash('sha256').update(expected).digest();return crypto.timingSafeEqual(a,b)}
