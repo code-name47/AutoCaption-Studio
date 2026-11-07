@@ -17,7 +17,7 @@ self.onmessage=async e=>{
     const pipe=await load();
     self.postMessage({type:'processing'});
     const audio=new Float32Array(e.data.audio);
-    const output=await pipe(audio,{chunk_length_s:20,stride_length_s:4,return_timestamps:true,task:'transcribe'});
+    const output=await pipe(audio,{chunk_length_s:20,stride_length_s:4,return_timestamps:true});
     const segments=(output.chunks||[]).map(x=>({start:Number(x.timestamp?.[0]||0),end:Number(x.timestamp?.[1]??x.timestamp?.[0]??0),text:x.text||''}));
     self.postMessage({type:'complete',result:{text:output.text||'',segments}});
   }catch(err){self.postMessage({type:'error',message:String(err?.message||err)})}
