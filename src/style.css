@@ -63,3 +63,19 @@
 .studio-panel.preview-hidden>.studio-transcribe,.studio-panel.preview-hidden>.studio-style,.studio-panel.preview-hidden>.result{grid-row:4/8}
 @media(max-width:950px){.studio-panel{grid-template-columns:minmax(0,1fr) 7px minmax(250px,var(--studio-side,285px))}}
 @media(max-width:700px){.studio-panel{display:flex;flex-direction:column}.studio-panel>.studio-divider{display:none}.studio-panel>.studio-resize-bar{order:2;width:100%}.studio-panel>.media-wrap{order:3;height:auto;max-height:var(--preview-height,540px)}.studio-panel>.media-wrap .preview{height:auto;max-height:var(--preview-height,540px)}.studio-panel>.toggle{order:4}.studio-panel>.studio-tools{order:5}.studio-panel>.studio-transcribe,.studio-panel>.studio-style,.studio-panel>.result{order:6;max-height:none}.studio-resize-bar input[type=range]{width:110px}}
+
+
+/* Compact media state and browser-local command console */
+.studio-header{display:flex;align-items:center;gap:16px}
+.studio-header .header-media{margin-left:auto;background:#7872e8;color:#fff;border:0;border-radius:9px;padding:9px 15px;font-weight:700;cursor:pointer}
+.studio-panel>.compact-drop{grid-column:1/-1;min-height:0!important;padding:7px 14px!important;display:flex;flex-direction:row;gap:12px;align-items:center;justify-content:flex-start;border-style:solid;border-radius:10px}
+.compact-drop strong{font-size:12px;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.compact-drop span{font-size:11px}
+.studio-command{grid-column:3;grid-row:4/8;margin:0;min-width:0;max-height:calc(100vh - 250px);overflow:auto;padding:16px;background:#10182a;border:1px solid #39415d;border-radius:12px}
+.studio-command h3{margin:0 0 8px}
+.command-log{height:240px;overflow:auto;border:1px solid #34415c;background:#0a1020;border-radius:9px;padding:12px;margin:12px 0}
+.command-log p{font-size:12px;line-height:1.5;overflow-wrap:anywhere;margin:0 0 10px}
+.studio-command form{display:flex;gap:6px}
+.studio-command form input{min-width:0;flex:1;padding:9px;border:1px solid #445070;border-radius:7px;background:#080f1f;color:#fff}
+.studio-command form button{padding:9px}
+@media(max-width:700px){.studio-header{flex-wrap:wrap}.studio-panel>.studio-command{order:6;width:100%;max-height:none}.compact-drop{flex-wrap:wrap}.compact-drop strong{max-width:100%}}
