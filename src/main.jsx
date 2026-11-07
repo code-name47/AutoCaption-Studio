@@ -1,0 +1,10 @@
+import React, { useEffect, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import './style.css';
+function App(){
+ const [me,setMe]=useState(null),[folder,setFolder]=useState(''),[videos,setVideos]=useState([]),[status,setStatus]=useState(''),[loading,setLoading]=useState(false);
+ useEffect(()=>{fetch('/api/me').then(r=>r.json()).then(x=>setMe(x.user||null)).catch(()=>{});},[]);
+ async function scan(){setLoading(true);setStatus('');try{const r=await fetch('/api/videos?folder='+encodeURIComponent(folder));const x=await r.json();if(!r.ok)throw Error(x.error||'Unable to scan');setVideos(x.videos||[]);setStatus(x.videos?.length?'Videos found. Cloud transcription is not enabled yet.':'No videos found in this folder.');}catch(e){setStatus(e.message);}finally{setLoading(false);}}
+ return <main><header><span className="brand">◉ AutoCaption <b>Studio</b></span><span className="tag">Secure transcription workspace</span></header><section className="hero"><div className="eyebrow">VIDEO → TEXT, SIMPLIFIED</div><h1>Every video has a story.<br/><em>Make it searchable.</em></h1><p>Connect your Google Drive and choose a folder to discover your videos. Transcription and automated exports are coming in the next implementation stage.</p>{!me?<a className="button" href="/auth/google">Connect Google Drive</a>:<div className="panel"><div className="account">Connected as <strong>{me.email}</strong> <a href="/auth/logout">Disconnect</a></div><label htmlFor="folder">Google Drive folder link</label><div className="inputrow"><input id="folder" value={folder} onChange={e=>setFolder(e.target.value)} placeholder="https://drive.google.com/drive/folders/…"/><button onClick={scan} disabled={loading||!folder.trim()}>{loading?'Scanning…':'Find videos'}</button></div>{status&&<p role="status" className="status">{status}</p>}{videos.map(v=><div className="video" key={v.id}><span>▣</span><div>{v.name}<small>{v.mimeType}</small></div></div>)}</div>}</section><footer>Private by design. No access to files outside the permissions you grant.</footer></main>
+}
+createRoot(document.getElementById('root')).render(<App/>);
