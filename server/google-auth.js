@@ -47,6 +47,28 @@ router.get('/callback',async(req,res)=>{
  }catch{return res.status(502).send('Google sign-in could not be completed. Please try again.')}
 });
 router.get('/me',(req,res)=>{const a=current(req);return res.set('Cache-Control','no-store').json(a?{connected:true,email:a.email}:{connected:false})});
+// Google Picker runs in the browser with a short-lived Google access token.
+// Only expose this token to the signed-in first-party page; never persist it client-side.
+function sameOrigin(req,res,next){const origin=req.get('Origin');if(origin&&origin!==new URL(redirect()).origin)return res.status(403).json({error:'Invalid origin'});next()}
+router.get('/picker-config',(req,res)=>{const a=current(req);if(!a)return res.status(401).json({error:'Connect Google first'});if(!process.env.GOOGLE_PICKER_API_KEY)return res.status(503).json({error:'GOOGLE_PICKER_API_KEY is missing in Render'});res.set('Cache-Control','no-store').json({accessToken:a.accessToken,apiKey:process.env.GOOGLE_PICKER_API_KEY,appId:process.env.GOOGLE_CLOUD_PROJECT_NUMBER||''})});
+router.get('/file/:id',async(req,res)=>{
+ const a=current(req);if(!a)return res.status(401).json({error:'Connect Google first'});
+ const fileId=req.params.id;
+ if(!/^[a-zA-Z0-9_-]{10,160}$/.test(fileId))return res.status(400).json({error:'Invalid file ID'});
+ try{
+  const metadata=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(fileId)+'?fields=id,name,mimeType,size',{headers:{Authorization:'Bearer '+a.accessToken},signal:AbortSignal.timeout(15000)});
+  if(!metadata.ok)return res.status(metadata.status===403?403:502).json({error:'Google Drive file access denied or unavailable'});
+  const info=await metadata.json();
+  if(!/^(video|audio)\//.test(info.mimeType||''))return res.status(415).json({error:'Choose a video or audio file'});
+  if(Number(info.size)>150*1024*1024)return res.status(413).json({error:'File exceeds 150 MB limit'});
+  const media=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(fileId)+'?alt=media',{headers:{Authorization:'Bearer '+a.accessToken},signal:AbortSignal.timeout(120000)});
+  if(!media.ok)return res.status(502).json({error:'Could not download the selected Drive file'});
+  res.set({'Content-Type':info.mimeType,'X-Media-Filename':encodeURIComponent(info.name||'drive-media'),'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
+  const bytes=await media.arrayBuffer();
+  if(bytes.byteLength>150*1024*1024)return res.status(413).end();
+  return res.end(Buffer.from(bytes));
+ }catch{return res.status(502).json({error:'Google Drive transfer failed'})}
+});
 router.post('/logout',(req,res)=>{const token=cookies(req)[cookieName];if(token)accounts.delete(digest(token));res.clearCookie(cookieName,{httpOnly:true,secure,sameSite:'lax',path:'/'});res.json({ok:true})});
 setInterval(()=>{for(const [k,v] of pending)if(v.expires<Date.now())pending.delete(k);for(const [k,v] of accounts)if(v.expires<Date.now())accounts.delete(k)},60000).unref();
 export default router;
