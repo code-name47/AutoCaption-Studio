@@ -3,6 +3,7 @@ import {Router} from 'express';
 const router=Router();
 const sessions=new Map();
 const TTL=30*60*1000;
+router.use((req,res,next)=>{res.set('Cache-Control','no-store');const origin=req.get('Origin');if(origin){try{if(new URL(origin).host!==req.get('host'))return res.status(403).json({error:'Cross-origin bridge requests are disabled'})}catch{return res.status(403).json({error:'Invalid origin'})}}next()});
 const id=()=>crypto.randomBytes(24).toString('base64url');
 const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
 const now=()=>Date.now();
