@@ -17,6 +17,7 @@ export default function EditorInspector({clip,asset,settings,onSettings,onPatch,
  const patch=(k,v)=>onPatch(clip.id,{[k]:v});
  return <aside className="ve-inspector"><div className="ve-pane-heading"><b>Inspector</b><small>{clip.trackId}</small></div><div className="ve-inspector-body">
   <h4 className="ve-inspector-title">{clip.kind==='text'?clip.text:asset?.name||'Selected clip'}</h4>
+  <label className="ve-field"><span>Lock clip</span><input type="checkbox" checked={Boolean(clip.locked)} onChange={e=>patch('locked',e.target.checked)}/></label>
   <div className="ve-inspector-tools"><button onClick={()=>onSplit(clip.id)}>✂ Split at playhead</button><button onClick={()=>onDelete(clip.id)}>Delete</button></div>
   <div className="ve-inspector-tools"><button title="Remove selected clip and close following gap" onClick={()=>onRippleDelete(clip.id)}>Ripple delete</button>
   {clip.kind==='video'&&!clip.trackId.startsWith('A')&&<button onClick={()=>onDetachAudio(clip.id)}>Detach audio</button>}
