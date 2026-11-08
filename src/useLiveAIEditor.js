@@ -131,5 +131,6 @@ export default function useLiveAIEditor({token,project,onStart,onStep,onRestore,
   context.current.onNotice?.('Last AI edit batch reverted.');
  },[recent]);
  useEffect(()=>{if(!token){setReview(null);setError('');setRecent(null);setProgress(null)}},[token]);
- return {review,applying,progress,error,recent,connected,approve,reject,demo,revert};
+ const dismiss=useCallback(()=>{if(!busyRef.current){setRecent(null);setError('');setProgress(null)}},[]);
+ return {review,applying,progress,error,recent,connected,approve,reject,demo,revert,dismiss};
 }
