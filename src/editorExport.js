@@ -1,4 +1,5 @@
-import {activeClips,clipEnd,renderOpacity,transitionProgress,timelineDuration,trackFor} from './editorCore.js';
+import {activeClips,clipEnd,transitionProgress,timelineDuration,trackFor} from './editorCore.js';
+import {resolvedClip,visualClipOpacity,audioClipGain} from './editorMotion.js';
 
 const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
 function supportedMime(){
@@ -27,17 +28,17 @@ function fitDraw(ctx,node,width,height){
 }
 function paintText(ctx,clip,width,height){
  ctx.save();
- const size=clamp(clip.fontSize||42,10,140)*width/1280;
+ const size=clamp(clip.fontSize??42,1,500)*width/1280;
  const lines=String(clip.text||'').split('\n');
  ctx.fillStyle=clip.fontColor||'#ffffff';
- ctx.font=(clip.fontWeight||700)+' '+Math.max(12,size)+'px '+(clip.fontFamily||'Arial');
+ ctx.font=(clip.fontWeight||700)+' '+Math.max(.5,size)+'px '+(clip.fontFamily||'Arial');
  ctx.textAlign='center';ctx.textBaseline='middle';ctx.shadowColor='rgba(0,0,0,.88)';ctx.shadowBlur=8;
  const lineHeight=Math.max(18,size*1.3),offset=(lines.length-1)*lineHeight/2;
  for(let i=0;i<lines.length;i++)ctx.fillText(lines[i],width/2,(clip.positionY||50)/100*height-offset+i*lineHeight,width*.92);
  ctx.restore();
 }
-function paintClip(ctx,clip,node,time,width,height){
- const alpha=renderOpacity(clip,time);
+function paintClip(ctx,clip,node,time,width,height,clips){
+ const alpha=visualClipOpacity(clip,clips,time);
  if(alpha<=0)return;
  ctx.save();ctx.globalAlpha=alpha;
  const progress=transitionProgress(clip,time);
@@ -117,13 +118,13 @@ export async function renderProjectToWebM({assets,clips,settings={},trackMuted={
       if(Math.abs(element.currentTime-desired)>.25){try{element.currentTime=desired}catch{}}
       element.playbackRate=clamp(clip.speed||1,.25,4);
       const gain=audioNodes.get(id);
-      if(gain)gain.gain.value=trackMuted[clip.trackId]||clip.muted?0:clamp(clip.volume??1,0,1)*renderOpacity(clip,t);
+      if(gain)gain.gain.value=trackMuted[clip.trackId]?0:audioClipGain(resolvedClip(clip,clips,t),clips,t);
       if(element.paused)element.play().catch(()=>{});
      }
      for(const clip of active){
       if(clip.kind==='audio'||clip.trackId.startsWith('A'))continue;
       const node=clip.kind==='image'?imageMap.get(clip.assetId):elements.get(clip.id);
-      paintClip(ctx,clip,node,t,width,height);
+      paintClip(ctx,resolvedClip(clip,clips,t),node,t,width,height,clips);
      }
      ctx.restore();
      if(now-last>250){onProgress(t/duration);last=now}
