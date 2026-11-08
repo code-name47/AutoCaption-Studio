@@ -35,6 +35,7 @@ body.ve-app-mode,body.ve-app-mode #root{height:100dvh;min-height:0;margin:0;over
 .ve-media-item{display:flex;align-items:center;min-width:0;gap:8px;padding:7px;border:1px solid #293951;border-radius:9px;background:#152137;cursor:grab}
 .ve-media-item.selected{border-color:#888bff;background:#242d52}.ve-media-item:active{cursor:grabbing}
 .ve-media-icon{display:flex;align-items:center;justify-content:center;background:#24365d;border-radius:7px;color:#b7bfff;width:37px;height:35px;flex:0 0 37px;font-size:18px}
+.ve-media-icon img{display:block;width:100%;height:100%;object-fit:cover;border-radius:6px}
 .ve-media-info{min-width:0;flex:1}.ve-media-info strong{display:block;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ve-media-info small{display:block;color:#91a0be;font-size:10px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ve-media-item button{padding:3px 8px;flex:0 0 auto}
