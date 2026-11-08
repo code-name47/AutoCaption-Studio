@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {clipEnd,clipLength,TRACKS} from './editorCore.js';
 import {overlaps} from './editorMotion.js';
+import {waveformLines} from './mediaWaveform.js';
 const CLOCK=n=>{const m=Math.floor(n/60),s=Math.floor(n%60);return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')};
 export default function EditorTimeline({
  tracks=TRACKS,clips,assets,time,zoom,setZoom,onSeek,onSelect,selectedId,onPlace,onMove,onTrim,onTrimStart,
@@ -133,6 +134,7 @@ export default function EditorTimeline({
          onClick={e=>{e.stopPropagation();onSelect(clip.id)}}>
          <span className="ve-trim-handle ve-trim-start" draggable={false} title="Drag to trim start" onPointerDown={e=>beginTrim(e,clip,'start')} onPointerMove={updateTrim} onPointerUp={endTrim} onPointerCancel={endTrim}/>
          <div className="ve-clip-content"><strong>{clip.kind==='motion'?'◆ Recorded animation':clip.kind==='text'?clip.text:(asset?.name||'Media unavailable')}</strong><small>{CLOCK(clipLength(clip))}{clip.transitionIn!=='none'?' · '+clip.transitionIn:''}{clip.kind==='motion'?' · '+(clip.keyframes?.length||0)+' keys':''}</small></div>
+         {track.kind==='audio'&&asset?.waveform?.length>0&&<svg className="ve-clip-waveform" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><path d={waveformLines(asset.waveform,clip.inPoint,clip.outPoint,asset.duration,Math.max(12,Math.min(90,Math.round(span/4))))} fill="none" stroke="#c7ffe6" strokeWidth="1.2" vectorEffect="non-scaling-stroke"/></svg>}
          <span className="ve-trim-handle ve-trim-end" draggable={false} title="Drag to trim end" onPointerDown={e=>beginTrim(e,clip,'end')} onPointerMove={updateTrim} onPointerUp={endTrim} onPointerCancel={endTrim}/>
         </div>;
        })}
