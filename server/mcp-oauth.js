@@ -127,7 +127,10 @@ router.get('/oauth/authorize',oauthLimiter,(req,res)=>{
  }
  try{limited(requests,LIMIT.requests)}catch{return res.status(429).send('Too many OAuth authorizations; retry later')}
  const key=rand();requests.set(digest(key),{...parsed,ownerId:account.userId,loginId:account.loginId,expires:now()+REQUEST_TTL});
- res.set('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
+ // OAuth consent is posted to our own server, then redirected to ChatGPT.
+// CSP form-action is checked across redirects in Chromium; restricting it to
+// 'self' silently blocked the callback and consumed the one-time request.
+ res.set('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://chatgpt.com; base-uri 'none'; frame-ancestors 'none'");
  return res.type('html').send(consentMarkup(key,account));
 });
 router.post('/oauth/authorize',oauthLimiter,express.urlencoded({extended:false,limit:'4kb'}),(req,res)=>{
@@ -140,13 +143,13 @@ router.post('/oauth/authorize',oauthLimiter,express.urlencoded({extended:false,l
  if(originHeader&&originHeader!==origin())return res.status(403).send('Invalid authorization origin');
  const u=new URL(pending.redirectUri);
  u.searchParams.set('state',pending.state);u.searchParams.set('iss',origin());
- if(req.body.decision!=='approve'){u.searchParams.set('error','access_denied');return res.redirect(u.toString())}
+ if(req.body.decision!=='approve'){u.searchParams.set('error','access_denied');return res.redirect(303,u.toString())}
  try{limited(codes,LIMIT.codes)}catch{return res.status(429).send('Too many authorization requests')}
  const code=rand();
  codes.set(digest(code),{ownerId:pending.ownerId,clientId:pending.clientId,redirectUri:pending.redirectUri,
   resource:pending.resource,scopes:pending.scopes,challenge:pending.challenge,expires:now()+CODE_TTL});
  u.searchParams.set('code',code);
- return res.redirect(u.toString());
+ return res.redirect(303,u.toString());
 });
 const tokenLimiter=rateLimit({windowMs:15*60000,limit:100,standardHeaders:'draft-7',legacyHeaders:false});
 router.post('/oauth/token',tokenLimiter,express.urlencoded({extended:false,limit:'8kb'}),(req,res)=>{
