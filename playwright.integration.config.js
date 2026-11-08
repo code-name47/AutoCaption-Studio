@@ -20,7 +20,7 @@ export default defineConfig({
   trace:'off'
  },
  webServer:{
-  command:'NODE_ENV=test node tests/fixtures/integrationServer.js',
+  command:'NODE_ENV=test APP_ORIGIN=http://127.0.0.1:4184 node tests/fixtures/integrationServer.js',
   url:'http://127.0.0.1:4184/__integration/health',
   reuseExistingServer:false,
   timeout:30_000
