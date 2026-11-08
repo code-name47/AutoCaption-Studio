@@ -60,3 +60,19 @@ test('animation clip duration survives saving and reuse',()=>{
  assert.equal(clipEnd(m),5);
  assert.equal(m.keyframes.length,2);
 });
+
+test('color changes interpolate and text changes switch discretely in animation',()=>{
+ const c=animateAt([{t:0,values:{fontColor:'#000000',text:'Start'}},{t:2,values:{fontColor:'#ffffff',text:'End'}}],1);
+ assert.equal(c.fontColor,'#808080');
+ assert.equal(c.text,'End');
+});
+test('reused motion affects only the top active clip when source is absent',()=>{
+ const low={...a,id:'low',trackId:'V2',start:10};
+ const top={...b,id:'top',trackId:'V2',start:12};
+ const motion=newMotionClip({id:'motion',targetClipId:'missing',trackId:'V2',start:12,end:15,keyframes:[
+  {t:0,values:{scale:1,offsetX:0}},{t:3,values:{scale:2,offsetX:30}}
+ ]});
+ const all=[low,top,motion];
+ assert.equal(resolvedClip(low,all,13).scale,1);
+ assert.ok(resolvedClip(top,all,13).scale>1);
+});
