@@ -7,6 +7,7 @@ import EditorTimeline from './EditorTimeline.jsx';
 import EditorInspector from './EditorInspector.jsx';
 import PanelSplitter from './PanelSplitter.jsx';
 import useLiveAIEditor from './useLiveAIEditor.js';
+import useLocalAIDemo from './useLocalAIDemo.js';
 import AIReviewPanel from './AIReviewPanel.jsx';
 import {editorProjectSnapshot} from './aiEditCommands.js';
 import {renderProjectToWebM} from './editorExport.js';
@@ -384,7 +385,27 @@ export default function EditorWorkspace(){
   },
   onNotice:note,onExpired:()=>{setBridgeToken('');note('AI bridge expired. Reconnect to continue.')}
  });
- return <div className={'ve-shell'+(ai.applying?' ve-ai-busy':'')}>
+ const localDemo=useLocalAIDemo({
+  project:aiProject,canApply:!busy&&!rendering&&!recordingTrackId,
+  remoteActive:!!ai.review||ai.applying,
+  onStart:()=>{setPlaying(false);setSourceViewer(false);record()},
+  onStep:step=>{
+   setClips(step.project.clips);
+   setSettings(old=>({...old,aspect:step.project.settings.aspect}));
+   setSelectedId(step.selectedId||'');
+   if(typeof step.focus==='number'){timeRef.current=step.focus;setTime(step.focus)}
+   note('Sample AI: '+step.description);
+  },
+  onRestore:previous=>{
+   setClips(previous.clips);
+   setSettings(old=>({...old,aspect:previous.settings.aspect}));
+   setSelectedId('');timeRef.current=0;setTime(0);
+  },
+  onNotice:note
+ });
+ const shownAI=ai.review||ai.applying?ai:
+  (localDemo.review||localDemo.applying||localDemo.recent||localDemo.error)?localDemo:ai;
+ return <div className={'ve-shell'+(ai.applying||localDemo.applying?' ve-ai-busy':'')}>
   <header className="ve-topbar">
    <div className="ve-logo"><span>◉</span> AUTOCAPTION <b>STUDIO</b><small>EDIT</small></div>
    <div className="ve-top-separator"/>
@@ -445,7 +466,9 @@ export default function EditorWorkspace(){
       <h4>Project</h4><button className="ve-wide-btn" onClick={saveProject} disabled={busy}>Save project to this browser</button><button className="ve-wide-btn" onClick={loadProject} disabled={busy}>Open saved browser project</button><p className="ve-note">Projects and source files are stored on this browser/device using IndexedDB, not in Google Drive.</p>
     </>}
     {tab==='ai'&&<><div className="ve-pane-heading"><b>Integrations</b><small>Early access</small></div>
-      <p className="ve-hint">Connect an AI client to propose edits. You will review them on-screen before they change the timeline. Only media names, timeline objects and canvas settings are shared; never video bytes.</p>
+       <p className="ve-hint">First try a visible sample AI edit. It uses the real editing engine without sign-in. Then connect an AI client to propose your own edits; approvals happen on-screen.</p>
+       <button className="ve-wide-btn ve-accent-btn" data-testid="run-local-ai-demo" disabled={busy||rendering||localDemo.applying||!!localDemo.review||!!ai.review||ai.applying} onClick={localDemo.queue}>Try sample AI edit now - no login</button>
+       <p className="ve-note">This sample is a scripted edit sequence, not a connected ChatGPT session. It changes the real timeline and can be rejected or reverted.</p>
       {googleAccount?<><div className="ve-connected">● Google: {googleAccount}</div><button className="ve-wide-btn" onClick={importFromDrive}>Import Drive videos</button><button className="ve-wide-btn" onClick={logoutGoogle}>Disconnect Google</button></>:<a className="ve-wide-link" href="/auth/google/start">Connect Google account</a>}
       <hr/><button className="ve-wide-btn ve-accent-btn" onClick={connectAI} disabled={!!bridgeToken||!googleAccount}>{bridgeToken?'● AI editing bridge connected':'Connect AI editing bridge'}</button>
       {bridgeToken&&<>
@@ -478,8 +501,8 @@ export default function EditorWorkspace(){
   </div>
   <PanelSplitter axis="horizontal" label="Resize timeline height" value={panelLayout.timeline} min={200} max={850} onResize={resizeTimeline} onReset={()=>{setTimelineExpanded(false);setPanelLayout(p=>({...p,timeline:freshPanelLayout().timeline}))}}/>
   <EditorTimeline panelHeight={panelLayout.timeline} expanded={timelineExpanded} onToggleExpanded={toggleTimelineSize} tracks={tracks} clips={clips} assets={assets} time={time} zoom={zoom} setZoom={setZoom} onSeek={seek} onSelect={id=>{setSelectedId(id);setSourceViewer(false);const item=clipsRef.current.find(c=>c.id===id);if(item&&item.kind!=='motion'&&(timeRef.current<item.start||timeRef.current>=clipEnd(item))){timeRef.current=item.start+.01;setTime(timeRef.current);setPlaying(false)}}} selectedId={selectedId} onPlace={placeAsset} onMove={moveClip} onTrim={trim} onTrimStart={record} onTransition={transition} onRemove={removeClip} onSplit={split} onDuplicate={duplicateClip} onAddTitle={trackId=>addTitle("New text",trackId,3)} onPatch={updateClip} onAddTrack={addTrack} onRemoveTrack={removeTrack} trackMuted={trackMuted} onToggleTrackMute={trackMute} recordingTrackId={recordingTrackId} onToggleRecord={toggleRecord} onOpenInspector={id=>{setSelectedId(id);setInspectorOpen(true)}}/>
-  <AIReviewPanel review={ai.review} applying={ai.applying} progress={ai.progress} recent={ai.recent} error={ai.error}
-    onApprove={ai.approve} onReject={ai.reject} onRevert={ai.revert} onDismiss={ai.dismiss}/>
+  <AIReviewPanel review={shownAI.review} applying={shownAI.applying} progress={shownAI.progress} recent={shownAI.recent} error={shownAI.error}
+    onApprove={shownAI.approve} onReject={shownAI.reject} onRevert={shownAI.revert} onDismiss={shownAI.dismiss}/>
   <input ref={input} type="file" multiple hidden accept="video/*,audio/*,image/*" onChange={e=>{importFiles(e.target.files);e.target.value=''}}/>
   <input ref={audioInput} type="file" multiple hidden accept="audio/*" onChange={e=>{importFiles(e.target.files);e.target.value=''}}/>
   <div className="ve-shortcuts">SPACE play/pause · S split · DEL remove · CTRL+Z undo · Drag preview to move/resize · Overlap clips to crossfade · ● Record motion</div>
