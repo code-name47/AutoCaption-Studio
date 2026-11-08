@@ -44,8 +44,13 @@ const TRANSCRIPTION_MODELS=new Set(['tiny','base','small']);
 function queueTranscription(session,args){
  const snapshot=visibleEditorSnapshot(session);
  if(!snapshot.connected)throw Error('Connect the browser editor before requesting transcription');
- const assetId=args?.asset_id;
- if(typeof assetId!=='string'||assetId.length>150)throw Error('Choose a valid asset_id from get_editor_project');
+ // Backwards compatibility: some already-connected ChatGPT clients cache
+ // the original queue_transcription tool schema with no arguments. For a
+ // single imported media asset, there is only one safe choice. Never guess
+ // when multiple assets are present.
+ const media=snapshot.project.assets.filter(a=>a.kind==='video'||a.kind==='audio');
+ const assetId=args?.asset_id??(media.length===1?media[0].id:undefined);
+ if(typeof assetId!=='string'||assetId.length>150)throw Error('Choose a valid asset_id from get_editor_project (required when multiple media files are imported)');
  const asset=snapshot.project.assets.find(a=>a.id===assetId);
  if(!asset||!['video','audio'].includes(asset.kind))throw Error('Transcription asset must be an imported video or audio file');
  if(!Number.isFinite(asset.duration)||asset.duration<=0||asset.duration>600)throw Error('Transcription supports media under 10 minutes');
