@@ -114,5 +114,5 @@ export function audioClipGain(clip,clips,time){
  const base=auto?.incomingId===clip.id&&clip.transitionIn==='crossfade'
   ?clamp((clip.opacity??1)*fadeEnd,0,1)
   :renderOpacity(clip,time);
- return clip.muted?0:clamp((clip.volume??1)*base*audioOverlapFactor(clip,clips,time),0,1);
+ return clip.muted?0:clamp((clip.volume??1)*base*audioOverlapFactor(clip,clips,time),0,2);
 }
