@@ -5,8 +5,8 @@ import {overlaps} from './editorMotion.js';
 const CLOCK=n=>{const m=Math.floor(n/60),s=Math.floor(n%60);return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')};
 export default function EditorTimeline({
  tracks=TRACKS,clips,assets,time,zoom,setZoom,onSeek,onSelect,selectedId,onPlace,onMove,onTrim,onTrimStart,
- onTransition,onRemove,onAddTrack,onRemoveTrack,onSplit,onDuplicate,onAddTitle,onPatch,
- trackMuted,onToggleTrackMute,recordingTrackId,onToggleRecord,onOpenInspector,
+ onTransition,onRemove,onAddTrack,onRemoveTrack,onSplit,onDuplicate,onAddTitle,onPatch,onDetachAudio,onSplitStereo,onRippleDelete,
+ trackMuted,trackSolo={},onToggleTrackMute,onToggleTrackSolo,recordingTrackId,onToggleRecord,onOpenInspector,
  panelHeight=335,expanded=false,onToggleExpanded
 }){
  const [dragHint,setDragHint]=useState(''),[menu,setMenu]=useState(null);
@@ -114,6 +114,7 @@ export default function EditorTimeline({
        <div><strong>{track.label}</strong><small>{track.id}</small></div>
        <button className="ve-track-record" aria-label={'Record '+track.label} title={recordingTrackId===track.id?'Stop animation recording':'Record changes on this track'} aria-pressed={recordingTrackId===track.id} onClick={e=>{e.stopPropagation();onToggleRecord(track.id)}}>{recordingTrackId===track.id?'■':'●'}</button>
        <button className={trackMuted[track.id]?'ve-muted':''} onClick={()=>onToggleTrackMute(track.id)} title={trackMuted[track.id]?'Unmute track':'Mute track'}>{trackMuted[track.id]?'M×':'M'}</button>
+       <button aria-label={'Solo '+track.label} aria-pressed={Boolean(trackSolo[track.id])} className={trackSolo[track.id]?'ve-solo':''} onClick={()=>onToggleTrackSolo(track.id)} title={trackSolo[track.id]?'Clear solo':'Solo this track audio'}>S</button>
       </div>
       <div className="ve-track-content" style={{width}}
        onDragOver={e=>{e.preventDefault();e.dataTransfer.dropEffect='move';setDragHint(track.id)}} onDragLeave={()=>setDragHint('')} onDrop={e=>drop(e,track)}
@@ -157,6 +158,9 @@ export default function EditorTimeline({
     {menu.overlapId&&<div className="ve-context-note">Automatic crossfade — move clips apart to remove.</div>}
     {menu.clipId&&<>
      {menuButton('✂ Split at playhead',()=>onSplit(menu.clipId))}
+     {menuButton('↤ Ripple delete and close gap',()=>onRippleDelete(menu.clipId))}
+     {clips.find(c=>c.id===menu.clipId)?.kind==='video'&&!menu.trackId.startsWith('A')&&menuButton('♫ Detach audio into audio track',()=>onDetachAudio(menu.clipId))}
+     {clips.find(c=>c.id===menu.clipId)?.kind==='audio'&&menuButton('⇄ Split stereo L/R',()=>onSplitStereo(menu.clipId))}
      {menuButton('⧉ Duplicate clip / animation',()=>onDuplicate(menu.clipId))}
      {menuButton('◈ Cross dissolve',()=>onTransition(menu.clipId,'crossfade',.7))}
      {menuButton('◐ Fade in',()=>onTransition(menu.clipId,'fade',.7))}
@@ -177,6 +181,7 @@ export default function EditorTimeline({
      {menuButton('＋ Add audio track',()=>onAddTrack('audio'))}
      {tracks.find(t=>t.id===menu.trackId)?.kind==='text'&&menuButton('T Add text at playhead',()=>onAddTitle(menu.trackId))}
      {menuButton(trackMuted[menu.trackId]?'Unmute track':'Mute track',()=>onToggleTrackMute(menu.trackId))}
+     {menuButton(trackSolo[menu.trackId]?'Clear track solo':'Solo track audio',()=>onToggleTrackSolo(menu.trackId))}
      <hr/>
      {menuButton('Remove track',()=>onRemoveTrack(menu.trackId))}
     </>}
