@@ -11,7 +11,7 @@ function layerStyle(clip,time){
  if(clip.transitionIn==='slide')style.transform='translateX('+((1-progress)*100)+'%) '+style.transform;
  return style;
 }
-export default function EditorPreview({assets,clips,time,playing,onSelect,selectedId,aspect='16:9'}){
+export default function EditorPreview({assets,clips,time,playing,onSelect,selectedId,aspect='16:9',trackMuted={}}){
  const nodes=useRef(new Map());
  const visible=useMemo(()=>activeClips(clips,time),[clips,time]);
  const visibleIds=visible.map(c=>c.id).join(',');
@@ -24,7 +24,7 @@ export default function EditorPreview({assets,clips,time,playing,onSelect,select
    if(element.readyState>=1&&Math.abs(element.currentTime-target)>.3){try{element.currentTime=target}catch{}}
    element.playbackRate=between(clip.speed,.25,4);
    const alpha=renderOpacity(clip,time);
-   element.volume=between(clip.muted?0:(clip.volume??1)*alpha,0,1);
+   element.volume=between(trackMuted[clip.trackId]||clip.muted?0:(clip.volume??1)*alpha,0,1);
    if(playing){if(element.paused)element.play().catch(()=>{})}else if(!element.paused)element.pause();
   }
  },[time,playing,visibleIds,clips,assets]);
