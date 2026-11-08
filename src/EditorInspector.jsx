@@ -28,7 +28,7 @@ export default function EditorInspector({clip,asset,settings,onSettings,onPatch,
   {(clip.kind==='video'||clip.kind==='audio')&&<details open><summary>Audio</summary><label className="ve-field"><span>Mute clip</span><input type="checkbox" checked={clip.muted} onChange={e=>patch('muted',e.target.checked)}/></label><Range label="Volume" value={clip.volume} min="0" max="1" step=".01" onChange={v=>patch('volume',v)}/></details>}
   {clip.kind!=='audio'&&<details open><summary>Transitions & fades</summary>
    <label className="ve-field"><span>Entrance</span><select value={clip.transitionIn} onChange={e=>onTransition(clip.id,e.target.value,clip.transitionDuration)}>
-    <option value="none">Cut (none)</option><option value="crossfade">Cross dissolve</option><option value="fade">Fade in</option><option value="wipe">Wipe right</option><option value="slide">Slide in</option>
+    <option value="none">Cut (none)</option><option value="crossfade">Cross dissolve</option><option value="fade">Fade in</option><option value="wipe">Wipe right</option><option value="slide">Slide in</option>{clip.kind==='text'&&<option value="rise">Rise from below</option>}
    </select></label>
    {clip.transitionIn!=='none'&&<NumberInput label="Transition (s)" min=".1" max="2" step=".1" value={clip.transitionDuration} onChange={v=>onTransition(clip.id,clip.transitionIn,v)}/>}
    <NumberInput label="Fade out (s)" min="0" max="3" step=".1" value={clip.fadeOut} onChange={v=>patch('fadeOut',v)}/>
