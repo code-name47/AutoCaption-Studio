@@ -92,6 +92,12 @@ test('AI MCP client edits the REAL browser timeline after human approval, with r
  expect(errors).toEqual([]);
 
  // The browser video and screenshots are uploaded from GitHub Actions after passing.
+ // Disconnect the integration browser before the next OAuth test runs.
+ // Each browser session is private and multiple active sessions must not be auto-selected.
+ const closed=await page.context().request.delete('http://127.0.0.1:4184/api/bridge/session',{
+  headers:{Authorization:'Bearer '+session.token}
+ });
+ expect(closed.ok()).toBe(true);
  await fs.writeFile(path.join(evidence,'AI_RUN_RESULT.txt'),[
   'PASSED: actual MCP JSON-RPC initialize, tools/list, get_editor_project, propose_editor_edits, status.',
   'PASSED: real browser received the AI proposal, required approval, updated live and produced video/screenshots.',
