@@ -3,7 +3,7 @@
 // to the same Google user's live, approval-gated browser editor.
 // State is intentionally in-memory for the MVP; do not use multiple server replicas.
 import crypto from 'node:crypto';
-import {Router} from 'express';
+import express,{Router} from 'express';
 import rateLimit from 'express-rate-limit';
 import {getGoogleAccount} from './google-auth.js';
 
