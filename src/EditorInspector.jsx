@@ -5,13 +5,14 @@ function NumberInput({label,value,min=0,max=9999,step=.1,onChange}){
  return <label className="ve-field"><span>{label}</span><input type="number" min={min} max={max} step={step} value={Number.isFinite(Number(value))?value:0} onChange={e=>{if(e.target.value!=='')onChange(Math.max(min,Math.min(max,Number(e.target.value))))}}/></label>;
 }
 function Range({label,value,min=0,max=2,step=.05,onChange}){
- return <label className="ve-range"><span>{label}<b>{fmt(value)}</b></span><input type="range" min={min} max={max} step={step} value={value} onChange={e=>onChange(Number(e.target.value))}/></label>;
+ return <label className="ve-range"><span>{label}<input aria-label={label+' exact value'} type="number" min={min} max={max} step={step} value={Number.isFinite(Number(value))?value:0} onChange={e=>{const n=Number(e.target.value);if(e.target.value!==''&&Number.isFinite(n))onChange(Math.max(min,Math.min(max,n)))}}/></span><input type="range" min={min} max={max} step={step} value={value} onChange={e=>onChange(Number(e.target.value))}/></label>;
 }
 export default function EditorInspector({clip,asset,settings,onSettings,onPatch,onTransition,onSplit,onDelete,time}){
  if(!clip)return <aside className="ve-inspector"><div className="ve-pane-heading"><b>Inspector</b><small>Project</small></div>
    <div className="ve-inspector-body"><h4>Project settings</h4><label className="ve-field"><span>Canvas aspect</span><select value={settings.aspect} onChange={e=>onSettings({...settings,aspect:e.target.value})}><option>16:9</option><option>9:16</option><option>1:1</option></select></label>
     <label className="ve-field"><span>Frame rate</span><select value={settings.fps} onChange={e=>onSettings({...settings,fps:Number(e.target.value)})}><option>24</option><option>25</option><option>30</option><option>60</option></select></label>
     <p className="ve-note">Select a clip on the timeline to adjust its trim, speed, sound, color, and transitions.</p></div></aside>;
+ if(clip.kind==='motion')return <aside className="ve-inspector"><div className="ve-pane-heading"><b>Animation</b><small>{clip.trackId}</small></div><div className="ve-inspector-body"><h4>Reusable motion clip</h4><p className="ve-note">This animation stores {clip.keyframes?.length||0} recorded keyframes. Drag it to another position or compatible track to reuse the motion on an object underneath it.</p><p className="ve-note">Duration: {fmt(clipLength(clip))} seconds</p><button onClick={()=>onDelete(clip.id)}>Delete animation</button></div></aside>;
  const duration=clipLength(clip);
  const patch=(k,v)=>onPatch(clip.id,{[k]:v});
  return <aside className="ve-inspector"><div className="ve-pane-heading"><b>Inspector</b><small>{clip.trackId}</small></div><div className="ve-inspector-body">
@@ -35,14 +36,14 @@ export default function EditorInspector({clip,asset,settings,onSettings,onPatch,
   {clip.kind==='text'&&<details open><summary>Text & caption</summary>
    <label className="ve-stacked-field"><span>Text</span><textarea rows="4" value={clip.text} onChange={e=>patch('text',e.target.value)}/></label>
    <label className="ve-field"><span>Text color</span><input type="color" value={clip.fontColor} onChange={e=>patch('fontColor',e.target.value)}/></label>
-   <NumberInput label="Font size" value={clip.fontSize} min="12" max="140" step="2" onChange={v=>patch('fontSize',v)}/>
+   <NumberInput label="Font size" value={clip.fontSize} min="1" max="500" step=".5" onChange={v=>patch('fontSize',v)}/>
    <NumberInput label="Vertical position %" value={clip.positionY} min="0" max="100" step="2" onChange={v=>patch('positionY',v)}/>
    <label className="ve-field"><span>Font</span><select value={clip.fontFamily} onChange={e=>patch('fontFamily',e.target.value)}><option>Arial</option><option>Verdana</option><option>Georgia</option><option>Impact</option><option>Tahoma</option></select></label>
   </details>}
   {clip.kind!=='audio'&&clip.kind!=='text'&&<details><summary>Transform & color</summary>
    <Range label="Opacity" value={clip.opacity} min="0" max="1" step=".02" onChange={v=>patch('opacity',v)}/>
-   <Range label="Zoom / scale" value={clip.scale} min=".5" max="3" step=".05" onChange={v=>patch('scale',v)}/>
-   <Range label="Horizontal position" value={clip.offsetX} min="-100" max="100" step="1" onChange={v=>patch('offsetX',v)}/>
+   <Range label="Zoom / scale" value={clip.scale} min=".05" max="10" step=".01" onChange={v=>patch('scale',v)}/>
+   <Range label="Horizontal position" value={clip.offsetX} min="-300" max="300" step=".5" onChange={v=>patch('offsetX',v)}/>
    <Range label="Vertical position" value={clip.offsetY} min="-100" max="100" step="1" onChange={v=>patch('offsetY',v)}/>
    <Range label="Rotation" value={clip.rotation} min="-180" max="180" step="1" onChange={v=>patch('rotation',v)}/>
    <Range label="Brightness" value={clip.brightness} min=".2" max="2" step=".05" onChange={v=>patch('brightness',v)}/>
