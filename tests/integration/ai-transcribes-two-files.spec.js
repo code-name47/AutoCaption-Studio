@@ -124,3 +124,54 @@ test('Existing ChatGPT connector with no-argument schema transcribes the only im
  const disconnected=await page.context().request.delete('/api/bridge/session',{headers:{Authorization:'Bearer '+token}});
  expect(disconnected.ok()).toBe(true);
 });
+
+
+test('Existing ChatGPT no-argument transcription processes two imported videos in order',async({page,request})=>{
+ await page.addInitScript(()=>{
+  const RealWorker=window.Worker;
+  window.Worker=class{
+   constructor(url,opts){if(!String(url).includes('transcription.worker'))return new RealWorker(url,opts);this.onmessage=null;}
+   postMessage(){setTimeout(()=>this.onmessage?.({data:{type:'complete',result:{
+    text:'Great gameplay feedback.',segments:[{start:0.1,end:0.9,text:'Great gameplay feedback.'}]
+   }}}),20)}
+   terminate(){}
+  };
+ });
+ await page.goto('/__integration/login');
+ await expect(page.locator('.ve-shell')).toBeVisible();
+ await page.locator('input[accept="video/*,audio/*,image/*"]').setInputFiles([
+  {name:'feedback-1.wav',mimeType:'audio/wav',buffer:wav(1.3)},
+  {name:'feedback-2.wav',mimeType:'audio/wav',buffer:wav(1.4)}
+ ]);
+ await expect(page.locator('.ve-media-item')).toHaveCount(2);
+ await page.locator('.ve-side-tabs button[title="Connect"]').click();
+ const sessionResponse=page.waitForResponse(r=>r.url().endsWith('/api/bridge/session')&&r.request().method()==='POST');
+ await page.getByRole('button',{name:'Connect AI editing bridge'}).click();
+ const {token}=await (await sessionResponse).json();
+ await expect(page.getByText('Browser synced and ready')).toBeVisible();
+ const rpc=async(name,args,id)=>{
+  const res=await request.post('/api/bridge/mcp',{
+   headers:{Authorization:'Bearer '+token},
+   data:{jsonrpc:'2.0',id,method:'tools/call',params:{name,arguments:args||{}}}
+  });
+  expect(res.status()).toBe(200);
+  const body=await res.json();
+  const data=JSON.parse(body.result.content[0].text);
+  if(body.result.isError)throw Error(data.error);
+  return data;
+ };
+ const project=await rpc('get_editor_project',{},1);
+ expect(project.project.assets).toHaveLength(2);
+ const first=await rpc('queue_transcription',{},2);
+ const second=await rpc('queue_transcription',{},3);
+ expect(first.asset_id).toBe(project.project.assets[0].id);
+ expect(second.asset_id).toBe(project.project.assets[1].id);
+ expect(first.job_id).not.toBe(second.job_id);
+ await expect.poll(async()=>[...((await rpc('list_transcriptions',{},4)).jobs||[])].filter(j=>j.status==='complete').length,{
+  timeout:20000,intervals:[500,900,1300]
+ }).toBe(2);
+ expect((await rpc('get_transcription',{job_id:first.job_id},5)).result[0].text).toBe('Great gameplay feedback.');
+ expect((await rpc('get_transcription',{job_id:second.job_id},6)).result[0].text).toBe('Great gameplay feedback.');
+ const disconnected=await page.context().request.delete('/api/bridge/session',{headers:{Authorization:'Bearer '+token}});
+ expect(disconnected.ok()).toBe(true);
+});
