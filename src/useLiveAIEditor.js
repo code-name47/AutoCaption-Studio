@@ -41,6 +41,19 @@ export default function useLiveAIEditor({token,project,onStart,onStep,onRestore,
   },200);
   return()=>{cancelled=true;clearTimeout(handle)};
  },[token,projectString,request]);
+ // Heartbeat: keep the Google-owned browser visible to the ChatGPT connection.
+ // Also refreshes the snapshot after local edits without transmitting any source footage.
+ useEffect(()=>{
+  if(!token)return;
+  const tick=setInterval(async()=>{
+   if(busyRef.current)return;
+   try{
+    const data=await request('/editor/snapshot',{method:'POST',body:JSON.stringify({project:context.current.project})});
+    setConnected(Boolean(data.connected));
+   }catch(e){setConnected(false);setError(e.message)}
+  },5000);
+  return()=>clearInterval(tick);
+ },[token,request]);
  // Poll queued proposals. The browser stays interactive until the user explicitly approves.
  useEffect(()=>{
   if(!token){setReview(null);setConnected(false);setProgress(null);return}
