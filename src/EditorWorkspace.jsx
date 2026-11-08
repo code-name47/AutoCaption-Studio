@@ -5,6 +5,7 @@ import {saveBrowserProject,loadBrowserProject} from './projectStorage.js';
 import EditorPreview from './EditorPreview.jsx';
 import EditorTimeline from './EditorTimeline.jsx';
 import EditorInspector from './EditorInspector.jsx';
+import PanelSplitter from './PanelSplitter.jsx';
 import {renderProjectToWebM} from './editorExport.js';
 import {makeMediaThumbnail} from './mediaThumbnails.js';
 import {captureMotion,newMotionClip} from './editorMotion.js';
@@ -12,6 +13,15 @@ import './editorWorkspace.css';
 
 const uid=()=>globalThis.crypto?.randomUUID?.()||'id-'+Math.random().toString(36).slice(2);
 const blankSettings={aspect:'16:9',fps:30};
+const freshPanelLayout=()=>({left:300,inspector:280,timeline:Math.round((typeof window==='undefined'?900:window.innerHeight)*.37)});
+function loadPanelLayout(){
+ const defaults=freshPanelLayout();
+ try{
+  const parsed=JSON.parse(window.localStorage.getItem('acs_editor_panels_v1')||'null');
+  return parsed&&['left','inspector','timeline'].every(k=>Number.isFinite(parsed[k]))?{left:Math.max(210,parsed.left),inspector:Math.max(220,parsed.inspector),timeline:Math.max(200,parsed.timeline)}:defaults;
+ }catch{return defaults}
+}
+const clampPanel=(n,low,high)=>Math.max(low,Math.min(high,n));
 const TYPE_MIMES='video/mp4,video/webm,video/quicktime,video/x-matroska,audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/ogg,audio/webm';
 const timeLabel=s=>{const n=Math.max(0,Number(s)||0);return Math.floor(n/60)+':'+String(Math.floor(n%60)).padStart(2,'0')+'.'+String(Math.floor(n%1*10))};
 function fileKind(file){
@@ -73,17 +83,48 @@ export default function EditorWorkspace(){
  const [name,setName]=useState('Untitled project'),[settings,setSettings]=useState(blankSettings),[tracks,setTracks]=useState(TRACKS),
  [assets,setAssets]=useState([]),[clips,setClips]=useState([]),[selectedId,setSelectedId]=useState(''),[selectedAssetId,setSelectedAssetId]=useState(''),
  [sourceViewer,setSourceViewer]=useState(false),[time,setTime]=useState(0),[playing,setPlaying]=useState(false),
- [zoom,setZoom]=useState(36),[viewZoom,setViewZoom]=useState(70),[tab,setTab]=useState('media'),[inspectorOpen,setInspectorOpen]=useState(true),
+ [zoom,setZoom]=useState(36),[viewZoom,setViewZoom]=useState(70),[panelLayout,setPanelLayout]=useState(loadPanelLayout),[timelineExpanded,setTimelineExpanded]=useState(false),[tab,setTab]=useState('media'),[inspectorOpen,setInspectorOpen]=useState(true),
  [trackMuted,setTrackMuted]=useState({}),[status,setStatus]=useState('Ready'),[busy,setBusy]=useState(false),
  [model,setModel]=useState('tiny'),[googleAccount,setGoogleAccount]=useState(''),[bridgeToken,setBridgeToken]=useState(''),
  [rendering,setRendering]=useState(false),[renderProgress,setRenderProgress]=useState(0),[historyVersion,setHistoryVersion]=useState(0),[recordingTrackId,setRecordingTrackId]=useState('');
- const input=useRef(null),audioInput=useRef(null),assetRef=useRef([]),fileImportActive=useRef(false),transcriptionWorker=useRef(null);
+ const editorMain=useRef(null),beforeExpand=useRef(null),input=useRef(null),audioInput=useRef(null),assetRef=useRef([]),fileImportActive=useRef(false),transcriptionWorker=useRef(null);
  const timeRef=useRef(0),playRef=useRef(false),past=useRef([]),future=useRef([]),clipsRef=useRef([]),recording=useRef(null);
  const currentClip=clips.find(c=>c.id===selectedId);
  const currentAsset=assets.find(a=>a.id===currentClip?.assetId);
  const selectedAsset=assets.find(a=>a.id===selectedAssetId);
  const length=useMemo(()=>timelineDuration(clips),[clips]);
- useEffect(()=>{document.body.classList.add('ve-app-mode');return()=>document.body.classList.remove('ve-app-mode')},[]);
+ useEffect(()=>{document.body.classList.add('ve-app-mode');return()=>{document.body.classList.remove('ve-app-mode');document.body.classList.remove('ve-is-resizing')}},[]);
+ useEffect(()=>{try{window.localStorage.setItem('acs_editor_panels_v1',JSON.stringify(panelLayout))}catch{}},[panelLayout]);
+ function resizeLeft(delta){
+  setPanelLayout(old=>{
+   const width=editorMain.current?.clientWidth||window.innerWidth;
+   const inspectorUsed=inspectorOpen&&window.innerWidth>900?old.inspector+7:0;
+   const max=Math.max(210,width-inspectorUsed-7-14-290);
+   return {...old,left:clampPanel(old.left+delta,210,max)};
+  });
+ }
+ function resizeInspector(delta){
+  setPanelLayout(old=>{
+   const width=editorMain.current?.clientWidth||window.innerWidth;
+   return {...old,inspector:clampPanel(old.inspector-delta,220,Math.max(220,width-old.left-7-7-14-290))};
+  });
+ }
+ function resizeTimeline(delta){
+  setTimelineExpanded(false);
+  setPanelLayout(old=>({...old,timeline:clampPanel(old.timeline-delta,200,Math.max(200,window.innerHeight-56-21-8-150))}));
+ }
+ function toggleTimelineSize(){
+  if(timelineExpanded){
+   setPanelLayout(old=>({...old,timeline:beforeExpand.current??freshPanelLayout().timeline}));
+   setTimelineExpanded(false);
+  }else{
+   beforeExpand.current=panelLayout.timeline;
+   setPanelLayout(old=>({...old,timeline:clampPanel(Math.round(window.innerHeight*.62),200,Math.max(200,window.innerHeight-56-21-8-150))}));
+   setTimelineExpanded(true);
+  }
+ }
+ function resetPanelLayout(){setPanelLayout(freshPanelLayout());setTimelineExpanded(false)}
+
  useEffect(()=>{assetRef.current=assets;clipsRef.current=clips},[assets,clips]);
  useEffect(()=>()=>{transcriptionWorker.current?.terminate();for(const a of assetRef.current)if(a.url)URL.revokeObjectURL(a.url)},[]);
  useEffect(()=>{fetch('/auth/google/me').then(r=>r.json()).then(d=>{if(d.connected)setGoogleAccount(d.email||'Connected')}).catch(()=>{})},[]);
@@ -330,12 +371,14 @@ export default function EditorWorkspace(){
    <div className="ve-top-actions">
     <button title="Undo (Ctrl+Z)" disabled={!past.current.length} onClick={undo}>↶</button>
     <button title="Redo (Ctrl+Y)" disabled={!future.current.length} onClick={redo}>↷</button>
+    <button title="Reset editor panel sizes" onClick={resetPanelLayout}>Reset panels</button>
     <button onClick={saveProject} disabled={busy||rendering}>Save</button>
     <button className="ve-accent-btn" onClick={()=>setTab('export')}>Export</button>
     <a href="/?classic=1" title="Original transcription and batch-processing view">Classic</a>
    </div>
   </header>
-  <div className="ve-main">
+  <div className="ve-main" ref={editorMain} style={{'--ve-left-width':panelLayout.left+'px','--ve-inspector-width':panelLayout.inspector+'px'}}>
+
    <aside className="ve-left">
     <nav className="ve-side-tabs" aria-label="Editor panels">{TABS.map(t=><button key={t.id} className={tab===t.id?'active':''} onClick={()=>setTab(t.id)} title={t.label}><span>{t.icon}</span><small>{t.label}</small></button>)}</nav>
     <div className="ve-left-content" onDragOver={e=>{if(Array.from(e.dataTransfer.types||[]).includes("Files"))e.preventDefault()}} onDrop={e=>{if(e.dataTransfer.files?.length){e.preventDefault();importFiles(e.dataTransfer.files)}}}>
@@ -387,6 +430,7 @@ export default function EditorWorkspace(){
     </>}
     </div>
    </aside>
+   <PanelSplitter label="Resize Project Files panel" value={panelLayout.left} min={210} max={750} onResize={resizeLeft} onReset={()=>setPanelLayout(p=>({...p,left:300}))}/>
    <section className="ve-monitor-panel"><div className="ve-monitor-head"><strong>{sourceViewer?'Source viewer':'Program monitor'}</strong>
   <div className="ve-monitor-aspect" aria-label="Canvas orientation">{['16:9','9:16','1:1'].map(a=><button key={a} aria-pressed={settings.aspect===a} title={a==='16:9'?'Landscape':a==='9:16'?'Portrait':'Square'} onClick={()=>setSettings(s=>({...s,aspect:a}))}>{a}</button>)}</div>
   <label className="ve-view-zoom">Canvas <input aria-label="Canvas view zoom" type="range" min="30" max="95" step="5" value={viewZoom} onChange={e=>setViewZoom(Number(e.target.value))}/>{viewZoom}%</label>
@@ -397,10 +441,12 @@ export default function EditorWorkspace(){
        :<EditorPreview assets={assets} clips={clips} time={time} playing={playing} selectedId={selectedId} onSelect={id=>{setSelectedId(id);const clip=clips.find(c=>c.id===id);if(clip?.assetId)setSelectedAssetId(clip.assetId);setSourceViewer(false)}} aspect={settings.aspect} viewZoom={viewZoom} trackMuted={trackMuted} onTransformStart={transformStart} onTransform={transformLive} onTransformEnd={()=>{}}/>}
      </div><div className="ve-transport"><button onClick={()=>seek(0)} title="Go to start">⏮</button><button className="ve-play" onClick={togglePlay}>{playing?'❚❚':'▶'}</button><button onClick={()=>seek(Math.min(length,time+5))} title="Skip 5 seconds">⏭</button><span>{timeLabel(time)} / {timeLabel(length)}</span><div className="ve-transport-fill"/><span className="ve-status-mini">{playing?'PLAY':'EDIT'}</span></div>
    </section>
+   {inspectorOpen&&<PanelSplitter label="Resize Inspector panel" value={panelLayout.inspector} min={220} max={700} onResize={resizeInspector} onReset={()=>setPanelLayout(p=>({...p,inspector:280}))}/>}
    {inspectorOpen&&<EditorInspector clip={currentClip} asset={currentAsset} settings={settings} onSettings={setSettings} onPatch={updateClip} onTransition={transition} onSplit={split} onDelete={removeClip} time={time}/>}
    <button className="ve-inspector-toggle" onClick={()=>setInspectorOpen(v=>!v)} title={inspectorOpen?'Hide inspector':'Show inspector'}>{inspectorOpen?'›':'‹'}</button>
   </div>
-  <EditorTimeline tracks={tracks} clips={clips} assets={assets} time={time} zoom={zoom} setZoom={setZoom} onSeek={seek} onSelect={id=>{setSelectedId(id);setSourceViewer(false);const item=clipsRef.current.find(c=>c.id===id);if(item&&item.kind!=='motion'&&(timeRef.current<item.start||timeRef.current>=clipEnd(item))){timeRef.current=item.start+.01;setTime(timeRef.current);setPlaying(false)}}} selectedId={selectedId} onPlace={placeAsset} onMove={moveClip} onTrim={trim} onTrimStart={record} onTransition={transition} onRemove={removeClip} onSplit={split} onDuplicate={duplicateClip} onAddTitle={trackId=>addTitle("New text",trackId,3)} onPatch={updateClip} onAddTrack={addTrack} onRemoveTrack={removeTrack} trackMuted={trackMuted} onToggleTrackMute={trackMute} recordingTrackId={recordingTrackId} onToggleRecord={toggleRecord} onOpenInspector={id=>{setSelectedId(id);setInspectorOpen(true)}}/>
+  <PanelSplitter axis="horizontal" label="Resize timeline height" value={panelLayout.timeline} min={200} max={850} onResize={resizeTimeline} onReset={()=>{setTimelineExpanded(false);setPanelLayout(p=>({...p,timeline:freshPanelLayout().timeline}))}}/>
+  <EditorTimeline panelHeight={panelLayout.timeline} expanded={timelineExpanded} onToggleExpanded={toggleTimelineSize} tracks={tracks} clips={clips} assets={assets} time={time} zoom={zoom} setZoom={setZoom} onSeek={seek} onSelect={id=>{setSelectedId(id);setSourceViewer(false);const item=clipsRef.current.find(c=>c.id===id);if(item&&item.kind!=='motion'&&(timeRef.current<item.start||timeRef.current>=clipEnd(item))){timeRef.current=item.start+.01;setTime(timeRef.current);setPlaying(false)}}} selectedId={selectedId} onPlace={placeAsset} onMove={moveClip} onTrim={trim} onTrimStart={record} onTransition={transition} onRemove={removeClip} onSplit={split} onDuplicate={duplicateClip} onAddTitle={trackId=>addTitle("New text",trackId,3)} onPatch={updateClip} onAddTrack={addTrack} onRemoveTrack={removeTrack} trackMuted={trackMuted} onToggleTrackMute={trackMute} recordingTrackId={recordingTrackId} onToggleRecord={toggleRecord} onOpenInspector={id=>{setSelectedId(id);setInspectorOpen(true)}}/>
   <input ref={input} type="file" multiple hidden accept="video/*,audio/*,image/*" onChange={e=>{importFiles(e.target.files);e.target.value=''}}/>
   <input ref={audioInput} type="file" multiple hidden accept="audio/*" onChange={e=>{importFiles(e.target.files);e.target.value=''}}/>
   <div className="ve-shortcuts">SPACE play/pause · S split · DEL remove · CTRL+Z undo · Drag preview to move/resize · Overlap clips to crossfade · ● Record motion</div>
