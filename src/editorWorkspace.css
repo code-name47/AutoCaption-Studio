@@ -297,3 +297,6 @@ body.ve-is-resizing,body.ve-is-resizing *{
 .ve-track-label button.ve-solo{color:#0a2631;background:#7ef2d4;border-color:#7ef2d4}
 .ve-clip-waveform{position:absolute;left:8px;right:8px;bottom:2px;width:calc(100% - 16px);height:21px;opacity:.72;pointer-events:none}
 .ve-chroma-layer{object-fit:contain}
+
+.ve-clip-locked{cursor:not-allowed;box-shadow:inset 0 0 0 2px #f5d18266}
+.ve-clip-locked .ve-trim-handle{cursor:not-allowed;pointer-events:none}
