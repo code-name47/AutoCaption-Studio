@@ -128,7 +128,7 @@ export function applyEditorAction(project,action){
  case 'set_clip_property':{
   failExtra(a,['type','clip_id','property','value']);const c=clipBy(p,a.clip_id);
   const property=a.property;assert(typeof property==='string','Invalid property');
-  const range=PROPERTY_RANGES[property];
+  const range=Object.hasOwn(PROPERTY_RANGES,property)?PROPERTY_RANGES[property]:null;
   if(range)assert(finite(a.value,...range),'Invalid '+property+' value');
   else if(property==='muted')assert(typeof a.value==='boolean','Muted must be boolean');
   else if(property==='fontColor')assert(c.kind==='text'&&typeof a.value==='string'&&COLORS.test(a.value),'Invalid font color');
