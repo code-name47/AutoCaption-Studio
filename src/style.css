@@ -79,3 +79,17 @@
 .studio-command form input{min-width:0;flex:1;padding:9px;border:1px solid #445070;border-radius:7px;background:#080f1f;color:#fff}
 .studio-command form button{padding:9px}
 @media(max-width:700px){.studio-header{flex-wrap:wrap}.studio-panel>.studio-command{order:6;width:100%;max-height:none}.compact-drop{flex-wrap:wrap}.compact-drop strong{max-width:100%}}
+
+/* Project media bin, playback monitor, and multi-clip sequence editor */
+.project-editor{margin:28px 0 12px;padding:20px;border:1px solid #34415c;border-radius:16px;background:#0e1728;color:#e8edff;text-align:left;min-width:0}
+.project-title{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:16px}.project-title h2{margin:0;font-size:21px}.project-title span,.project-timeline-head span{color:#9ca9c9;font-size:12px}
+.project-grid{display:grid;grid-template-columns:minmax(220px,32%) minmax(0,1fr);gap:16px}
+.project-bin{border:1px solid #34415c;border-radius:12px;background:#101c30;padding:12px;max-height:420px;overflow:auto;min-width:0}
+.project-actions{margin-bottom:12px}.project-editor button{cursor:pointer;border:1px solid #4c5a7d;border-radius:7px;padding:7px 10px;background:#202d49;color:#f2f4ff}.project-editor button:disabled{opacity:.4;cursor:not-allowed}
+.project-bin details{margin-bottom:12px}.project-bin summary{cursor:pointer;margin:8px 0}.project-bin details button{display:block;text-align:left;width:100%;margin:4px 0;overflow-wrap:anywhere}
+.project-asset{display:flex;align-items:center;gap:6px;border-bottom:1px solid #34415c;padding:7px 0}.project-asset>button:first-child{min-width:0;flex:1;text-align:left;overflow-wrap:anywhere}.project-asset small,.project-clip small{display:block;color:#aebadd;font-size:11px;margin-top:4px}.project-asset.chosen>button:first-child{border-color:#9891ff}
+.project-monitor{min-width:0}.project-screen{background:#050914;border:1px solid #34415c;border-radius:12px;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;overflow:hidden}.project-screen video{width:100%;height:100%;object-fit:contain}.project-placeholder{text-align:center;color:#9ca9c9;padding:25px}
+.project-transport{display:flex;align-items:center;gap:14px;padding:10px 0;font-variant-numeric:tabular-nums}
+.project-timeline{margin-top:16px;background:#101c30;border:1px solid #34415c;border-radius:12px;padding:14px}.project-timeline-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}.project-timeline input[type=range]{width:100%;accent-color:#928aff;margin:16px 0}
+.project-clips{display:flex;min-height:92px;overflow-x:auto;gap:5px;align-items:stretch}.project-clip{min-width:140px;max-width:520px;background:#283a62;border:1px solid #526eaa;border-radius:8px;padding:8px;display:flex;flex-direction:column;justify-content:space-between;gap:5px}.project-clip.active{outline:2px solid #a8a0ff}.project-clip .clip-main{text-align:left;overflow-wrap:anywhere;flex:1;background:transparent;border:0;padding:2px}.clip-controls{display:flex;gap:5px;justify-content:flex-end}.clip-controls button{padding:2px 8px}
+@media(max-width:700px){.project-editor{padding:12px}.project-grid{grid-template-columns:1fr}.project-bin{max-height:220px}.project-clips{overflow-x:auto}}
