@@ -293,3 +293,7 @@ body.ve-is-resizing,body.ve-is-resizing *{
 .ve-track-label-resizer:hover,.ve-track-label-resizer:focus-visible{background:#8e8bfa80}
 .ve-track-label-resizer::after{content:'';position:absolute;right:5px;top:5px;bottom:5px;width:2px;background:#6e88a9;border-radius:1px}
 .ve-track-label strong{font-size:11px}
+
+.ve-track-label button.ve-solo{color:#0a2631;background:#7ef2d4;border-color:#7ef2d4}
+.ve-clip-waveform{position:absolute;left:8px;right:8px;bottom:2px;width:calc(100% - 16px);height:21px;opacity:.72;pointer-events:none}
+.ve-chroma-layer{object-fit:contain}
