@@ -2,7 +2,6 @@ name: Editor UI smoke tests
 on:
   push:
     branches:
-      - feature/secure-transcription-starter
       - main
   pull_request:
   workflow_dispatch:
