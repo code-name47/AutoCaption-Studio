@@ -13,6 +13,7 @@ import AIReviewPanel from './AIReviewPanel.jsx';
 import {editorProjectSnapshot} from './aiEditCommands.js';
 import {renderProjectToWebM} from './editorExport.js';
 import {makeMediaThumbnail} from './mediaThumbnails.js';
+import {captureVisualReview} from './editorVisualReview.js';
 import {captureMotion,newMotionClip} from './editorMotion.js';
 import './editorWorkspace.css';
 
@@ -91,7 +92,7 @@ export default function EditorWorkspace(){
  [zoom,setZoom]=useState(36),[viewZoom,setViewZoom]=useState(70),[panelLayout,setPanelLayout]=useState(loadPanelLayout),[timelineExpanded,setTimelineExpanded]=useState(false),[tab,setTab]=useState('media'),[inspectorOpen,setInspectorOpen]=useState(true),
  [trackMuted,setTrackMuted]=useState({}),[status,setStatus]=useState('Ready'),[busy,setBusy]=useState(false),
  [model,setModel]=useState('tiny'),[googleAccount,setGoogleAccount]=useState(''),[bridgeToken,setBridgeToken]=useState(''),
- [rendering,setRendering]=useState(false),[renderProgress,setRenderProgress]=useState(0),[historyVersion,setHistoryVersion]=useState(0),[recordingTrackId,setRecordingTrackId]=useState('');
+ [rendering,setRendering]=useState(false),[renderProgress,setRenderProgress]=useState(0),[historyVersion,setHistoryVersion]=useState(0),[recordingTrackId,setRecordingTrackId]=useState(''),[visualReviewBusy,setVisualReviewBusy]=useState(false),[visualReviewInfo,setVisualReviewInfo]=useState(null);
  const editorMain=useRef(null),beforeExpand=useRef(null),input=useRef(null),audioInput=useRef(null),assetRef=useRef([]),fileImportActive=useRef(false),transcriptionWorker=useRef(null);
  const timeRef=useRef(0),playRef=useRef(false),past=useRef([]),future=useRef([]),clipsRef=useRef([]),recording=useRef(null);
  const currentClip=clips.find(c=>c.id===selectedId);
@@ -262,6 +263,35 @@ export default function EditorWorkspace(){
  }
  async function logoutGoogle(){const r=await fetch('/auth/google/logout',{method:'POST'});if(!r.ok){note('Could not disconnect Google');return}setGoogleAccount('');setBridgeToken('');note('Google disconnected. Existing loaded media remains in this local project.')}
  async function connectAI(){try{const r=await fetch('/api/bridge/session',{method:'POST'});const d=await r.json();if(!r.ok)throw Error(d.error||'Could not connect');setBridgeToken(d.token);setTab('ai');note('AI bridge connected. Approve proposed edits in this browser.');}catch(e){note(e.message)}}
+ async function shareVisualReview(){
+  if(!bridgeToken||!ai.connected||visualReviewBusy||busy||rendering||!clips.length)return;
+  setVisualReviewBusy(true);setPlaying(false);
+  note('Capturing six small preview frames locally for your connected ChatGPT session…');
+  try{
+   // Synchronize the exact project revision before uploading opt-in stills.
+   const synced=await fetch('/api/bridge/editor/snapshot',{
+    method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+bridgeToken},
+    body:JSON.stringify({project:aiProject})});
+   const syncResult=await synced.json();
+   if(!synced.ok)throw Error(syncResult.error||'Cannot synchronize the current timeline');
+   const proof=await captureVisualReview({assets,clips,settings});
+   const response=await fetch('/api/bridge/editor/review',{
+    method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+bridgeToken},
+    body:JSON.stringify({...proof,revision:syncResult.revision})});
+   const result=await response.json();
+   if(!response.ok)throw Error(result.error||'Cannot share this visual review');
+   setVisualReviewInfo({frames:result.frames,notes:result.notes,expiresAt:Date.now()+result.expiresInSeconds*1000,waveformAvailable:result.waveformAvailable});
+   note('Shared '+result.frames+' preview frames with your connected AI for five minutes. Ask ChatGPT to inspect them.');
+  }catch(e){note('Visual review: '+e.message)}
+  finally{setVisualReviewBusy(false)}
+ }
+ async function clearVisualReview(){
+  if(!bridgeToken)return;
+  try{const response=await fetch('/api/bridge/editor/review',{method:'DELETE',headers:{Authorization:'Bearer '+bridgeToken}});
+   if(!response.ok)throw Error('Could not clear preview frames');
+   setVisualReviewInfo(null);note('Shared preview frames revoked.');
+  }catch(e){note(e.message)}
+ }
  async function transcribeSelected(){
   const asset=selectedAsset||currentAsset;
   if(!asset?.file||!['video','audio'].includes(asset.kind)){note('Select a video or audio file in Project Files first.');return}
@@ -484,6 +514,11 @@ export default function EditorWorkspace(){
        <label className="ve-stacked-field"><span>Remote MCP endpoint</span><input readOnly aria-label="AI MCP server URL" value={window.location.origin+'/api/bridge/mcp'}/></label>
        <button className="ve-wide-btn" onClick={()=>navigator.clipboard.writeText(window.location.origin+'/api/bridge/mcp')}>Copy MCP server URL</button>
        <button className="ve-wide-btn" disabled={!ai.connected||ai.applying||!!ai.review} onClick={ai.demo}>Test live AI editing (approval required)</button>
+       <hr/>
+       <h4>Visual & timing review</h4>
+       <p className="ve-note">Optional: explicitly share up to six small screenshots of the real video composition with your connected AI. Frames may show people or private content. Only short-lived JPEG previews, caption timing notes, and optional audio energy measurements are shared—not your original video, audio, or Drive credentials. Expires after 5 minutes or any timeline change.</p>
+       <button className="ve-wide-btn ve-accent-btn" data-testid="share-ai-visual-review" disabled={!ai.connected||visualReviewBusy||busy||rendering||ai.applying||!clips.length} onClick={shareVisualReview}>{visualReviewBusy?'Preparing local preview frames…':'Share 6 preview frames with ChatGPT'}</button>
+       {visualReviewInfo&&<div className="ve-note" data-testid="ai-visual-review-status"><strong>Preview frames shared:</strong> {visualReviewInfo.frames} still images. {visualReviewInfo.waveformAvailable?'Audio energy summary included.':'Audio energy summary unavailable.'}<ul>{visualReviewInfo.notes.map((n,i)=><li key={i}>{n}</li>)}</ul><button className="ve-wide-btn" onClick={clearVisualReview}>Revoke shared preview frames</button></div>}
        <p className="ve-note"><strong>Connect this to ChatGPT:</strong> In ChatGPT Plugins, choose + → Add custom MCP server. Enter the endpoint above, choose OAuth, and authorize with the <strong>same Google account</strong>. Install the resulting AutoCaption Studio plugin and select it in your next chat message. No session token needs to be copied into ChatGPT.</p>
        <p className="ve-note">Keep this editor tab open. The browser editing bridge currently expires after 30 minutes, so reconnect here if editing stops.</p>
        <button className="ve-wide-btn" onClick={async()=>{try{await fetch('/api/bridge/session',{method:'DELETE',headers:{Authorization:'Bearer '+bridgeToken}})}finally{setBridgeToken('');note('AI editing bridge disconnected')}}}>Disconnect AI bridge</button>
