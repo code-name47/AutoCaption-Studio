@@ -5,11 +5,15 @@ import {renderKeyedImage} from './editorChroma.js';
 import {cropMargins} from './editorEnhancements.js';
 
 const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
-function supportedMime(){
- if(typeof MediaRecorder==='undefined')throw Error('MediaRecorder is unavailable in this browser.');
- const choices=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+function supportedMime(format='webm'){
+ if(typeof MediaRecorder==='undefined')return null;
+ const choices=format==='mp4'
+  ?['video/mp4;codecs="avc1.42E01E,mp4a.40.2"','video/mp4;codecs=avc1.42E01E','video/mp4']
+  :['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
  return choices.find(type=>MediaRecorder.isTypeSupported(type))||null;
 }
+export const supportsMp4Export=()=>Boolean(supportedMime('mp4'));
+
 function dimensions(aspect){
  if(aspect==='9:16')return [540,960];
  if(aspect==='1:1')return [720,720];
@@ -78,12 +82,13 @@ function paintClip(ctx,clip,node,time,width,height,clips,chromaCaches){
  }catch(e){console.warn('Export compositing error:',e.message)}
  ctx.restore();
 }
-export async function renderProjectToWebM({assets,clips,settings={},trackMuted={},trackSolo={},onProgress=()=>{}}){
+export async function renderProjectToVideo({assets,clips,settings={},trackMuted={},trackSolo={},format='webm',onProgress=()=>{}}){
  const duration=timelineDuration(clips);
  if(duration<=0)throw Error('The timeline is empty.');
  if(duration>600)throw Error('This browser renderer currently supports timelines up to 10 minutes.');
  if(typeof document==='undefined'||typeof HTMLCanvasElement==='undefined'||!HTMLCanvasElement.prototype.captureStream)throw Error('Canvas stream export is not supported in this browser.');
- const mime=supportedMime();if(!mime)throw Error('WebM recording is not supported in this browser. Try current Chrome or Edge.');
+ if(!['webm','mp4'].includes(format))throw Error('Unknown export format');
+ const mime=supportedMime(format);if(!mime)throw Error(format.toUpperCase()+' export is unavailable in this browser. Use WebM or a supported browser.');
  const [width,height]=dimensions(settings.aspect);
  const fps=clamp(Number(settings.fps)||30,15,30);
  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
@@ -172,3 +177,6 @@ export async function renderProjectToWebM({assets,clips,settings={},trackMuted={
   if(audioContext)await audioContext.close().catch(()=>{});
  }
 }
+
+// Backward-compatible entrypoint used by the existing editor and tests.
+export const renderProjectToWebM=options=>renderProjectToVideo({...options,format:'webm'});
