@@ -280,7 +280,7 @@ export default function EditorWorkspace(){
   <div className="ve-main">
    <aside className="ve-left">
     <nav className="ve-side-tabs" aria-label="Editor panels">{TABS.map(t=><button key={t.id} className={tab===t.id?'active':''} onClick={()=>setTab(t.id)} title={t.label}><span>{t.icon}</span><small>{t.label}</small></button>)}</nav>
-    <div className="ve-left-content">
+    <div className="ve-left-content" onDragOver={e=>{if(Array.from(e.dataTransfer.types||[]).includes("Files"))e.preventDefault()}} onDrop={e=>{if(e.dataTransfer.files?.length){e.preventDefault();importFiles(e.dataTransfer.files)}}}>
     {tab==='media'&&<><div className="ve-pane-heading"><b>Project Files</b><small>{assets.length} assets</small></div>
      <div className="ve-media-actions"><button className="ve-accent-btn" onClick={()=>input.current?.click()}>+ Import media</button><button onClick={importFromDrive} disabled={busy}>Google Drive</button></div>
      {!googleAccount&&<a href="/auth/google/start" className="ve-connect-hint">Connect Google Drive to import cloud videos</a>}
