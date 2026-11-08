@@ -387,18 +387,21 @@ export default function EditorWorkspace(){
     </>}
     </div>
    </aside>
-   <section className="ve-monitor-panel"><div className="ve-monitor-head"><strong>{sourceViewer?'Source viewer':'Program monitor'}</strong><span>{settings.aspect} · {settings.fps} fps</span><button onClick={()=>setSourceViewer(false)} disabled={!sourceViewer}>Timeline preview</button></div>
+   <section className="ve-monitor-panel"><div className="ve-monitor-head"><strong>{sourceViewer?'Source viewer':'Program monitor'}</strong>
+  <div className="ve-monitor-aspect" aria-label="Canvas orientation">{['16:9','9:16','1:1'].map(a=><button key={a} aria-pressed={settings.aspect===a} title={a==='16:9'?'Landscape':a==='9:16'?'Portrait':'Square'} onClick={()=>setSettings(s=>({...s,aspect:a}))}>{a}</button>)}</div>
+  {recordingTrackId&&<span className="ve-recording-banner">● REC {recordingTrackId}</span>}
+  <span>{settings.fps} fps</span><button onClick={()=>setSourceViewer(false)} disabled={!sourceViewer}>Timeline preview</button></div>
      <div className="ve-monitor-area">{sourceViewer&&selectedAsset?.url?
        (selectedAsset.kind==='image'?<img className="ve-source-player" alt={selectedAsset.name} src={selectedAsset.url}/>:selectedAsset.kind==='audio'?<audio className="ve-source-audio" src={selectedAsset.url} controls/>:<video key={selectedAsset.id} className="ve-source-player" controls src={selectedAsset.url}/>)
-       :<EditorPreview assets={assets} clips={clips} time={time} playing={playing} selectedId={selectedId} onSelect={id=>{setSelectedId(id);const clip=clips.find(c=>c.id===id);if(clip?.assetId)setSelectedAssetId(clip.assetId);setSourceViewer(false)}} aspect={settings.aspect} trackMuted={trackMuted}/>}
+       :<EditorPreview assets={assets} clips={clips} time={time} playing={playing} selectedId={selectedId} onSelect={id=>{setSelectedId(id);const clip=clips.find(c=>c.id===id);if(clip?.assetId)setSelectedAssetId(clip.assetId);setSourceViewer(false)}} aspect={settings.aspect} trackMuted={trackMuted} onTransformStart={transformStart} onTransform={transformLive} onTransformEnd={()=>{}}/>}
      </div><div className="ve-transport"><button onClick={()=>seek(0)} title="Go to start">⏮</button><button className="ve-play" onClick={togglePlay}>{playing?'❚❚':'▶'}</button><button onClick={()=>seek(Math.min(length,time+5))} title="Skip 5 seconds">⏭</button><span>{timeLabel(time)} / {timeLabel(length)}</span><div className="ve-transport-fill"/><span className="ve-status-mini">{playing?'PLAY':'EDIT'}</span></div>
    </section>
    {inspectorOpen&&<EditorInspector clip={currentClip} asset={currentAsset} settings={settings} onSettings={setSettings} onPatch={updateClip} onTransition={transition} onSplit={split} onDelete={removeClip} time={time}/>}
    <button className="ve-inspector-toggle" onClick={()=>setInspectorOpen(v=>!v)} title={inspectorOpen?'Hide inspector':'Show inspector'}>{inspectorOpen?'›':'‹'}</button>
   </div>
-  <EditorTimeline tracks={tracks} clips={clips} assets={assets} time={time} zoom={zoom} setZoom={setZoom} onSeek={seek} onSelect={id=>{setSelectedId(id);setSourceViewer(false)}} selectedId={selectedId} onPlace={placeAsset} onMove={moveClip} onTrim={trim} onTrimStart={record} onTransition={transition} onRemove={removeClip} onAddTrack={addTrack} trackMuted={trackMuted} onToggleTrackMute={trackMute}/>
+  <EditorTimeline tracks={tracks} clips={clips} assets={assets} time={time} zoom={zoom} setZoom={setZoom} onSeek={seek} onSelect={id=>{setSelectedId(id);setSourceViewer(false)}} selectedId={selectedId} onPlace={placeAsset} onMove={moveClip} onTrim={trim} onTrimStart={record} onTransition={transition} onRemove={removeClip} onSplit={split} onDuplicate={duplicateClip} onAddTitle={trackId=>addTitle("New text",trackId,3)} onAddTrack={addTrack} onRemoveTrack={removeTrack} trackMuted={trackMuted} onToggleTrackMute={trackMute} recordingTrackId={recordingTrackId} onToggleRecord={toggleRecord} onOpenInspector={id=>{setSelectedId(id);setInspectorOpen(true)}}/>
   <input ref={input} type="file" multiple hidden accept="video/*,audio/*,image/*" onChange={e=>{importFiles(e.target.files);e.target.value=''}}/>
   <input ref={audioInput} type="file" multiple hidden accept="audio/*" onChange={e=>{importFiles(e.target.files);e.target.value=''}}/>
-  <div className="ve-shortcuts">SPACE play/pause · S split · DEL remove · CTRL+Z undo · Drag clip edges to trim</div>
+  <div className="ve-shortcuts">SPACE play/pause · S split · DEL remove · CTRL+Z undo · Drag preview to move/resize · Overlap clips to crossfade · ● Record motion</div>
  </div>;
 }
