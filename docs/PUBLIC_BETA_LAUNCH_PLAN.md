@@ -42,6 +42,18 @@ Last reviewed: 2026-11-08. Sources: this repository, current Render service conf
 
 **Security principle:** It is not possible to promise that any public application is literally “unhackable.” Use independent testing, least privilege, tenant isolation, measurable controls and a documented response process.
 
+## ChatGPT distribution is a separate launch track
+
+- A public website link can be opened by anyone; a write-capable **custom MCP connection** cannot presently be assumed available to every ChatGPT account. Official ChatGPT documentation says full custom MCP editing support is available to Business and Enterprise/Edu customers, with different permissions for Pro read/fetch connectors. Do not claim all Free/Plus users can install a private custom MCP bridge.
+- To distribute through ChatGPT broadly, prepare an **official public Plugin Directory submission**: developer/business verification, published privacy policy and company website, stable MCP OAuth, clear tool descriptions/annotations, reviewer demo credentials and test prompts, safety reviews, and support. Public review and approval are separate from publishing a working MCP URL.
+- To make AutoCaption Studio usable by **everyone**, do not require ChatGPT account linking for the core workflow. Build a self-contained in-app AI assistant powered by a backend provider API (user consent, quotas, cost controls, private account storage); offer the ChatGPT plugin as an optional integration for supported plans.
+- The existing bridge requires one open browser for live edits; a full headless batch-processing product needs durable jobs that keep running safely after the user's browser closes.
+- Before claiming multi-account compatibility, test a separate Google account and a distinct ChatGPT workspace, verify OAuth redirect allowlists, token refresh, account isolation, and onboarding success.
+
+Official guidance:
+- https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt
+- https://developers.openai.com/plugins/deploy/app-review
+
 ## P1 — Product features worth prioritizing after visual QA
 
 | Priority | Feature | User benefit | Notes |
