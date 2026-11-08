@@ -66,6 +66,6 @@ test('timeline markers save/reopen and locked media cannot be deleted until unlo
  await page.getByRole('button',{name:'Open saved browser project'}).click();
  await expect(page.locator('.ve-ruler-marker')).toHaveCount(1);
  await expect(page.locator('.ve-clip')).toHaveCount(1);
- await page.locator('.ve-ruler-marker').first().click({button:'right'});
+ await page.locator('.ve-ruler-marker').first().click({button:'right',timeout:7000});
  await expect(page.locator('.ve-ruler-marker')).toHaveCount(0);
 });
