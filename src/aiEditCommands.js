@@ -1,13 +1,15 @@
 // Shared, deterministic edit commands. Browser and bridge validate the same operations.
 // No arbitrary JavaScript, file paths, URLs or browser DOM actions can be sent via AI edits.
 import {TRACKS,accepts,newClip,clipEnd,clipLength,splitClip,addTransition,roundTime} from './editorCore.js';
+import {detachAudioFromVideo,rippleDelete,applyAudioPreset} from './editorEnhancements.js';
 
 const ASPECTS=['16:9','9:16','1:1'];
 const TRANSITIONS=['none','crossfade','fade','wipe','slide','rise'];
 const PROPERTY_RANGES={
  volume:[0,1],opacity:[0,1],scale:[.05,10],offsetX:[-300,300],offsetY:[-100,100],
  rotation:[-180,180],brightness:[.2,2],contrast:[.2,2],saturation:[0,3],
- fontSize:[1,500],positionY:[0,100],speed:[.1,4]
+ fontSize:[1,500],positionY:[0,100],speed:[.1,4],pan:[-1,1],eqLow:[-18,18],eqMid:[-18,18],eqHigh:[-18,18],
+ chromaTolerance:[.01,.9],chromaSoftness:[0,.5],textOutlineWidth:[0,12],textShadow:[0,1],hueRotate:[-180,180],blur:[0,20]
 };
 const COLORS=/^#[0-9a-fA-F]{6}$/;
 const FONTS=['Arial','Verdana','Georgia','Impact','Tahoma'];
@@ -143,16 +145,46 @@ export function applyEditorAction(project,action){
   updated=copy(p,{clips:addTransition(p.clips,c.id,a.transition,duration)});
   description='Apply '+a.transition+' to '+c.id;focus=c.start;selectedId=c.id;break;
  }
+ case 'detach_audio':{
+  failExtra(a,['type','clip_id','track_id']);
+  const clip=clipBy(p,a.clip_id);
+  assert(clip.kind==='video'&&!clip.trackId.startsWith('A'),'Select a visual video clip to detach');
+  assert(!p.clips.some(c=>c.kind==='audio'&&c.linkedSourceId===clip.id),'Already detached');
+  const track=a.track_id||'A1';
+  assert((p.settings?.tracks||TRACKS).some(t=>t.id===track&&t.kind==='audio'),'Destination audio track not found');
+  const newId=makeId(p,'ai-audio-');
+  const next=detachAudioFromVideo(p.clips,clip.id,newId,track);
+  updated=copy(p,{clips:next.clips});
+  description='Detach audio from '+clip.id+' into '+track;focus=clip.start;selectedId=newId;break;
+ }
+ case 'ripple_delete':{
+  failExtra(a,['type','clip_id']);const clip=clipBy(p,a.clip_id);
+  updated=copy(p,{clips:rippleDelete(p.clips,clip.id)});
+  description='Ripple delete '+clip.id+' and close the gap';focus=clip.start;selectedId='';break;
+ }
+ case 'audio_preset':{
+  failExtra(a,['type','clip_id','preset']);
+  const clip=clipBy(p,a.clip_id),result=applyAudioPreset(clip,a.preset);
+  updated=copy(p,{clips:p.clips.map(c=>c.id===clip.id?result:c)});
+  description='Apply '+a.preset+' audio mix to '+clip.id;focus=clip.start;selectedId=clip.id;break;
+ }
  case 'set_clip_property':{
   failExtra(a,['type','clip_id','property','value']);const c=clipBy(p,a.clip_id);
   const property=a.property;assert(typeof property==='string','Invalid property');
   const range=Object.hasOwn(PROPERTY_RANGES,property)?PROPERTY_RANGES[property]:null;
   if(range)assert(finite(a.value,...range),'Invalid '+property+' value');
-  else if(property==='muted')assert(typeof a.value==='boolean','Muted must be boolean');
+  else if(property==='muted'||property==='chromaKey')assert(typeof a.value==='boolean','Expected boolean');
+  else if(property==='audioChannel')assert(['stereo','left','right'].includes(a.value),'Invalid audio channel');
+  else if(['chromaColor','textOutlineColor'].includes(property))assert(typeof a.value==='string'&&COLORS.test(a.value),'Invalid color');
   else if(property==='fontColor')assert(c.kind==='text'&&typeof a.value==='string'&&COLORS.test(a.value),'Invalid font color');
   else if(property==='fontFamily')assert(c.kind==='text'&&FONTS.includes(a.value),'Invalid font family');
   else throw new Error('Property is not editable by AI');
-  if(['fontSize','positionY'].includes(property))assert(c.kind==='text','Text property applies only to text clips');
+  if(['fontSize','positionY','textOutlineColor','textOutlineWidth','textShadow'].includes(property))
+   assert(c.kind==='text','Text property applies only to text clips');
+  if(['audioChannel','pan','eqLow','eqMid','eqHigh'].includes(property))
+   assert(['video','audio'].includes(c.kind),'Audio controls require audio/video media');
+  if(['chromaKey','chromaColor','chromaTolerance','chromaSoftness'].includes(property))
+   assert(['video','image'].includes(c.kind)&&!c.trackId.startsWith('A'),'Chroma key requires a visual clip');
   updated=copy(p,{clips:p.clips.map(x=>x.id===c.id?{...x,[property]:a.value}:x)});
   description='Set '+property+' of '+c.id+' to '+a.value;focus=c.start;selectedId=c.id;break;
  }
@@ -182,6 +214,9 @@ export const EDITOR_ACTION_DESCRIPTION=[
  'add_text: {type,text,start,duration,track_id?:"T1"|"C1"}',
  'add_media: {type,asset_id,start,track_id}',
  'remove_clip: {type,clip_id}',
+ 'ripple_delete: {type,clip_id} (remove and close following gap)',
+ 'detach_audio: {type,clip_id,track_id?} (mute original video and add synced audio clip)',
+ 'audio_preset: {type,clip_id,preset:"dialogue"|"music"|"flat"}',
  'set_transition: {type,clip_id,transition:"none"|"crossfade"|"fade"|"wipe"|"slide"|"rise",duration?}',
  'style_captions: {type,font_size,last_font_size,position_y,rise_duration} (styles all C1 captions with credits-style rise)',
  'set_clip_property: {type,clip_id,property,value}'
