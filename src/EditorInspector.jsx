@@ -7,7 +7,7 @@ function NumberInput({label,value,min=0,max=9999,step=.1,onChange}){
 function Range({label,value,min=0,max=2,step=.05,onChange}){
  return <label className="ve-range"><span>{label}<input aria-label={label+' exact value'} type="number" min={min} max={max} step={step} value={Number.isFinite(Number(value))?value:0} onChange={e=>{const n=Number(e.target.value);if(e.target.value!==''&&Number.isFinite(n))onChange(Math.max(min,Math.min(max,n)))}}/></span><input type="range" min={min} max={max} step={step} value={value} onChange={e=>onChange(Number(e.target.value))}/></label>;
 }
-export default function EditorInspector({clip,asset,settings,onSettings,onPatch,onTransition,onSplit,onDelete,onDetachAudio,onSplitStereo,onRippleDelete,onAudioPreset,time}){
+export default function EditorInspector({clip,asset,settings,onSettings,onPatch,onTransition,onSplit,onDelete,onDetachAudio,onSplitStereo,onRippleDelete,onAudioPreset,onNormalizeAudio,time}){
  if(!clip)return <aside className="ve-inspector"><div className="ve-pane-heading"><b>Inspector</b><small>Project</small></div>
    <div className="ve-inspector-body"><h4>Project settings</h4><label className="ve-field"><span>Canvas aspect</span><select value={settings.aspect} onChange={e=>onSettings({...settings,aspect:e.target.value})}><option>16:9</option><option>9:16</option><option>1:1</option></select></label>
     <label className="ve-field"><span>Frame rate</span><select value={settings.fps} onChange={e=>onSettings({...settings,fps:Number(e.target.value)})}><option>24</option><option>25</option><option>30</option><option>60</option></select></label>
@@ -30,7 +30,11 @@ export default function EditorInspector({clip,asset,settings,onSettings,onPatch,
   </details>
   {(clip.kind==='video'||clip.kind==='audio')&&<details open><summary>Audio mixer and channels</summary>
    <label className="ve-field"><span>Mute clip</span><input type="checkbox" checked={clip.muted} onChange={e=>patch('muted',e.target.checked)}/></label>
-   <Range label="Volume" value={clip.volume} min="0" max="1" step=".01" onChange={v=>patch('volume',v)}/>
+   <Range label="Volume / gain" value={clip.volume} min="0" max="2" step=".01" onChange={v=>patch('volume',v)}/>
+   <div className="ve-inspector-tools"><button disabled={!asset?.waveform?.length} onClick={()=>onNormalizeAudio(clip.id)}>Peak normalize</button></div>
+   <NumberInput label="Fade in (seconds)" min="0" max="2" step=".1" value={clip.transitionIn==='fade'?clip.transitionDuration:0}
+    onChange={v=>onTransition(clip.id,v>0?'fade':'none',Math.max(.1,v))}/>
+   <NumberInput label="Fade out (seconds)" min="0" max="3" step=".1" value={clip.fadeOut??0} onChange={v=>patch('fadeOut',v)}/>
    <Range label="Stereo pan" value={clip.pan??0} min="-1" max="1" step=".05" onChange={v=>patch('pan',v)}/>
    <label className="ve-field"><span>Audio channel</span><select value={clip.audioChannel||'stereo'} onChange={e=>patch('audioChannel',e.target.value)}>
     <option value="stereo">Original stereo</option><option value="left">Left only</option><option value="right">Right only</option>
