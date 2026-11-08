@@ -301,5 +301,5 @@ body.ve-is-resizing,body.ve-is-resizing *{
 .ve-clip-locked{cursor:not-allowed;box-shadow:inset 0 0 0 2px #f5d18266}
 .ve-clip-locked .ve-trim-handle{cursor:not-allowed;pointer-events:none}
 
-.ve-ruler-marker{position:absolute;top:11px;transform:translateX(-50%);color:#f5c758!important;background:transparent!important;border:none!important;font-size:15px!important;padding:0!important;z-index:5;cursor:pointer;line-height:1}
+.ve-ruler-marker{position:absolute;top:11px;transform:translateX(-50%);color:#f5c758!important;background:transparent!important;border:none!important;font-size:15px!important;padding:0!important;z-index:85;cursor:pointer;line-height:1}
 .ve-ruler-marker:hover{color:#fff7cb!important;filter:drop-shadow(0 0 3px #e8ad4f)}
