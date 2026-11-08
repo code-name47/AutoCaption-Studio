@@ -167,3 +167,11 @@ body.ve-app-mode,body.ve-app-mode #root{height:100dvh;min-height:0;margin:0;over
 .ve-monitor-aspect{display:flex;gap:4px;align-items:center}
 .ve-monitor-aspect button{padding:4px 8px;font-size:11px}
 .ve-monitor-aspect button[aria-pressed=true]{background:#535da0;border-color:#949bff;color:#fff}
+
+.ve-view-zoom{display:flex;align-items:center;gap:5px;color:#9eafca;font-size:10px;white-space:nowrap}
+.ve-view-zoom input{width:75px;accent-color:#a3a6ff}
+.ve-offscreen-indicator{position:absolute;z-index:120;transform:translate(-50%,-50%);white-space:nowrap;
+ background:#f6f9ff;color:#18223a;border:2px solid #8499e4;border-radius:5px;padding:4px 6px;
+ font-size:10px;font-weight:700;cursor:move;touch-action:none;box-shadow:0 2px 8px #0009}
+.ve-context-note{padding:7px 10px;color:#afd3ed;font-size:11px;max-width:215px;white-space:normal}
+@media(max-width:1000px){.ve-view-zoom{display:none}.ve-monitor-aspect button{padding:3px 5px}}
