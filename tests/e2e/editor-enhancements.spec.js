@@ -9,6 +9,8 @@ test('portrait and landscape canvas, small subtitle fonts and direct off-canvas 
  await expect(page.locator('.ve-object-outline')).toBeVisible();
  await page.getByRole('button',{name:'9:16'}).click();
  await expect(page.locator('.ve-stage-frame[data-aspect="9:16"]')).toBeVisible();
+ const portrait=await page.locator('.ve-stage-frame').boundingBox();
+ expect(Math.abs(portrait.width/portrait.height-9/16)).toBeLessThan(.03);
  const fontsize=page.locator('.ve-inspector .ve-field').filter({hasText:'Font size'}).locator('input');
  await fontsize.fill('4');
  await expect(fontsize).toHaveValue('4');
@@ -25,6 +27,8 @@ test('portrait and landscape canvas, small subtitle fonts and direct off-canvas 
  await expect(page.locator('.ve-offscreen-indicator')).toBeVisible();
  await page.getByRole('button',{name:'16:9'}).click();
  await expect(page.locator('.ve-stage-frame[data-aspect="16:9"]')).toBeVisible();
+ const landscape=await page.locator('.ve-stage-frame').boundingBox();
+ expect(Math.abs(landscape.width/landscape.height-16/9)).toBeLessThan(.03);
  expect(errors).toEqual([]);
 });
 
