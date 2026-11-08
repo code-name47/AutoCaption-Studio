@@ -14,6 +14,32 @@ The default route (/) opens the full-screen editor. The original transcription i
 
 The layout docks tools around a preview monitor with internal panel and timeline scrolling. Expand the timeline for detailed work.
 
+
+## Direct canvas manipulation
+
+- Click any visible title, subtitle, image, or video in the **Program monitor**. Its white outline and four handles let you drag or resize the object directly.
+- Text sizing supports sizes as low as **1** in the Inspector. Drag a corner to change font size or enter an exact value manually.
+- Use the **16:9**, **9:16**, or **1:1** buttons in the monitor toolbar to choose the actual output frame. The preview respects the selected aspect ratio.
+- The white rectangle is the **exported area**. You can move selected content outside it (for entrance/exit animations). An out-of-frame indicator remains draggable, and the **Canvas zoom** slider expands the visible pasteboard.
+- Transform, rotation, color, scale, subtitle position and audio-volume sliders have adjacent number fields for precise entry.
+
+## Automatic overlap transitions
+
+- Drag a clip partly over another clip **on the same track**. The intersection becomes a blue rounded **automatic crossfade** badge. Moving the clips apart removes it; moving them again changes its duration.
+- The visual uses a dissolve between the two images. The audio uses an **equal-power crossfade** between both clips' audio streams. A silent source contributes silence; nothing is synthesized.
+- Overlapping clips on *different* video tracks remain independent overlays. Manually selected fades, wipes and slides are still available in the Transitions panel or right-click menu.
+- Right-click a clip for split, duplicate, removal, fade/transition presets, monochrome, brightness, contrast and reset effects. Right-click empty track space for track controls.
+
+## Record track animation
+
+1. Select a visual, title, subtitle, or audio clip on its track and seek inside it.
+2. Click the **red ●** beside that track. The playhead starts moving and the track is armed.
+3. Drag, resize, or reposition the selected object in the canvas, or change numeric Inspector properties. Those changes are recorded as timed keyframes.
+4. Click **■ Stop** whenever you choose. If you made changes, AutoCaption Studio creates a **purple Recorded animation clip** on that track. Your original clip's static values are restored; the animation clip plays the recorded changes.
+5. Drag the purple animation clip along the timeline or to another compatible track to reuse its motion over media on that track. Right-click to duplicate it.
+
+This is an initial linear-interpolation motion recorder for canvas transforms, text properties, colors, and volume. It is not yet a full graph/Bezier animation editor or frame-accurate motion capture system. The same recorded keyframes are evaluated during preview and experimental WebM export.
+
 ## Important limitations
 
 - **Experimental export:** Canvas, MediaRecorder and Web Audio render in real time and may be slow, silent or unsupported on some browsers. Check exported files before publishing.
