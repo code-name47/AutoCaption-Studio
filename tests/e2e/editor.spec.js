@@ -11,6 +11,10 @@ test('full-screen editor can import, drag between tracks, add a title, and reope
  const secondVideoTrack=page.locator('.ve-track-row').nth(1).locator('.ve-track-content');
  await asset.dragTo(secondVideoTrack,{targetPosition:{x:160,y:24}});
  await expect(secondVideoTrack.locator('.ve-clip')).toHaveCount(1);
+ const firstVideoTrack=page.locator('.ve-track-row').nth(2).locator('.ve-track-content');
+ await secondVideoTrack.locator('.ve-clip').dragTo(firstVideoTrack,{targetPosition:{x:180,y:25}});
+ await expect(firstVideoTrack.locator('.ve-clip')).toHaveCount(1);
+ await expect(secondVideoTrack.locator('.ve-clip')).toHaveCount(0);
  await page.getByTitle('Create video track').click();
  await expect(page.locator('.ve-track-row')).toHaveCount(8);
  await page.locator('.ve-side-tabs button[title="Titles"]').click();
