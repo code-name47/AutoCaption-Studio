@@ -13,7 +13,7 @@ import AIReviewPanel from './AIReviewPanel.jsx';
 import {editorProjectSnapshot} from './aiEditCommands.js';
 import {renderProjectToWebM} from './editorExport.js';
 import {makeMediaThumbnail} from './mediaThumbnails.js';
-import {captureVisualReview} from './editorVisualReview.js';
+import {captureVisualReview,reviewTimelineNotes} from './editorVisualReview.js';
 import {captureMotion,newMotionClip} from './editorMotion.js';
 import './editorWorkspace.css';
 
@@ -92,13 +92,14 @@ export default function EditorWorkspace(){
  [zoom,setZoom]=useState(36),[viewZoom,setViewZoom]=useState(70),[panelLayout,setPanelLayout]=useState(loadPanelLayout),[timelineExpanded,setTimelineExpanded]=useState(false),[tab,setTab]=useState('media'),[inspectorOpen,setInspectorOpen]=useState(true),
  [trackMuted,setTrackMuted]=useState({}),[status,setStatus]=useState('Ready'),[busy,setBusy]=useState(false),
  [model,setModel]=useState('tiny'),[googleAccount,setGoogleAccount]=useState(''),[bridgeToken,setBridgeToken]=useState(''),
- [rendering,setRendering]=useState(false),[renderProgress,setRenderProgress]=useState(0),[historyVersion,setHistoryVersion]=useState(0),[recordingTrackId,setRecordingTrackId]=useState(''),[visualReviewBusy,setVisualReviewBusy]=useState(false),[visualReviewInfo,setVisualReviewInfo]=useState(null);
+ [rendering,setRendering]=useState(false),[renderProgress,setRenderProgress]=useState(0),[historyVersion,setHistoryVersion]=useState(0),[recordingTrackId,setRecordingTrackId]=useState(''),[visualReviewBusy,setVisualReviewBusy]=useState(false),[visualReviewInfo,setVisualReviewInfo]=useState(null),[showCaptionAudit,setShowCaptionAudit]=useState(false);
  const editorMain=useRef(null),beforeExpand=useRef(null),input=useRef(null),audioInput=useRef(null),assetRef=useRef([]),fileImportActive=useRef(false),transcriptionWorker=useRef(null);
  const timeRef=useRef(0),playRef=useRef(false),past=useRef([]),future=useRef([]),clipsRef=useRef([]),recording=useRef(null);
  const currentClip=clips.find(c=>c.id===selectedId);
  const currentAsset=assets.find(a=>a.id===currentClip?.assetId);
  const selectedAsset=assets.find(a=>a.id===selectedAssetId);
  const length=useMemo(()=>timelineDuration(clips),[clips]);
+ const captionAuditNotes=useMemo(()=>reviewTimelineNotes(clips,assets),[clips,assets]);
  useEffect(()=>{document.body.classList.add('ve-app-mode');return()=>{document.body.classList.remove('ve-app-mode');document.body.classList.remove('ve-is-resizing')}},[]);
  useEffect(()=>{try{window.localStorage.setItem('acs_editor_panels_v1',JSON.stringify(panelLayout))}catch{}},[panelLayout]);
  function resizeLeft(delta){
@@ -482,6 +483,8 @@ export default function EditorWorkspace(){
       <button className="ve-wide-btn ve-accent-btn" disabled={busy||!((selectedAsset||currentAsset)?.file)} onClick={transcribeSelected}>{busy?'Working…':'Transcribe selected media'}</button>
       <button className="ve-wide-btn" disabled={busy||!assets.some(a=>['video','audio'].includes(a.kind)&&!a.transcript?.length)} onClick={transcribeAll}>Transcribe all project videos</button>
       <button className="ve-wide-btn" onClick={addCaptionsFromAsset} disabled={!(selectedAsset||currentAsset)?.transcript?.length}>Place subtitles on C1 track</button>
+      <button className="ve-wide-btn" data-testid="run-caption-audit" disabled={!clips.length} onClick={()=>setShowCaptionAudit(v=>!v)}>{showCaptionAudit?'Hide timeline timing report':'Check caption timing and gaps'}</button>
+      {showCaptionAudit&&<div className="ve-note" data-testid="caption-audit-report"><strong>Timeline timing review</strong><ul>{captionAuditNotes.length?captionAuditNotes.map((n,i)=><li key={i}>{n}</li>):<li>No structural timing gaps detected.</li>}</ul><small>Transcript matches are approximate; audio must still be reviewed by ear.</small></div>}
       <p className="ve-note">You can trim and edit each subtitle on the timeline and in the inspector.</p>
     </>}
     {tab==='titles'&&<><div className="ve-pane-heading"><b>Titles & Text</b><small>Overlays</small></div>
