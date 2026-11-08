@@ -40,7 +40,7 @@ export default function EditorInspector({clip,asset,settings,onSettings,onPatch,
    <NumberInput label="Vertical position %" value={clip.positionY} min="0" max="100" step="2" onChange={v=>patch('positionY',v)}/>
    <label className="ve-field"><span>Font</span><select value={clip.fontFamily} onChange={e=>patch('fontFamily',e.target.value)}><option>Arial</option><option>Verdana</option><option>Georgia</option><option>Impact</option><option>Tahoma</option></select></label>
   </details>}
-  {clip.kind!=='audio'&&clip.kind!=='text'&&<details><summary>Transform & color</summary>
+  {clip.kind!=='audio'&&<details open><summary>Transform & color</summary>
    <Range label="Opacity" value={clip.opacity} min="0" max="1" step=".02" onChange={v=>patch('opacity',v)}/>
    <Range label="Zoom / scale" value={clip.scale} min=".05" max="10" step=".01" onChange={v=>patch('scale',v)}/>
    <Range label="Horizontal position" value={clip.offsetX} min="-300" max="300" step=".5" onChange={v=>patch('offsetX',v)}/>
