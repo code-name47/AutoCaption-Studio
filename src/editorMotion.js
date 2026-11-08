@@ -1,8 +1,8 @@
 // Pure timeline animation and overlap model shared by preview and exported video.
 import {clipEnd,renderOpacity} from './editorCore.js';
-export const MOTION_FIELDS=['offsetX','offsetY','scale','rotation','opacity','fontSize','positionY','volume','brightness','contrast','saturation'];
+export const MOTION_FIELDS=['offsetX','offsetY','scale','rotation','opacity','fontSize','positionY','volume','brightness','contrast','saturation','fontWeight','fontColor','fontFamily','text'];
 export const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-export const captureMotion=c=>Object.fromEntries(MOTION_FIELDS.map(key=>[key,Number(c?.[key]??(key==='scale'||key==='opacity'||key==='volume'||key==='brightness'||key==='contrast'||key==='saturation'?1:0))]));
+export const captureMotion=c=>Object.fromEntries(MOTION_FIELDS.map(key=>[key,typeof c?.[key]==='string'?c[key]:Number(c?.[key]??(key==='scale'||key==='opacity'||key==='volume'||key==='brightness'||key==='contrast'||key==='saturation'?1:0))]));
 export function overlaps(clips){
  const byTrack=new Map();
  for(const c of clips)if(c.kind!=='motion'){
@@ -36,6 +36,13 @@ export function audioOverlapFactor(clip,clips,time){
  // Equal-power crossfade: prevents a harsh volume dip at the midpoint.
  return o.incomingId===clip.id?Math.sin(angle):Math.cos(angle);
 }
+
+function blendColor(a,b,k){
+ if(typeof a!=='string'||typeof b!=='string'||!/^#[0-9a-f]{6}$/i.test(a)||!/^#[0-9a-f]{6}$/i.test(b))return null;
+ const rgb=x=>[1,3,5].map(i=>parseInt(x.slice(i,i+2),16));
+ const u=rgb(a),v=rgb(b);
+ return '#'+u.map((n,i)=>Math.round(n+(v[i]-n)*k).toString(16).padStart(2,'0')).join('');
+}
 export function animateAt(keyframes,seconds){
  if(!Array.isArray(keyframes)||!keyframes.length)return {};
  const frames=keyframes.slice().sort((a,b)=>a.t-b.t);
@@ -43,7 +50,7 @@ export function animateAt(keyframes,seconds){
  for(let i=1;i<frames.length;i++)if(seconds<=frames[i].t){
   const a=frames[i-1],b=frames[i],k=clamp((seconds-a.t)/Math.max(.001,b.t-a.t),0,1);
   const values={};for(const key of new Set([...Object.keys(a.values),...Object.keys(b.values)])){
-   const u=a.values[key],v=b.values[key];values[key]=Number.isFinite(u)&&Number.isFinite(v)?u+(v-u)*k:(k<.5?u:v);
+   const u=a.values[key],v=b.values[key];values[key]=Number.isFinite(u)&&Number.isFinite(v)?u+(v-u)*k:(blendColor(u,v,k)??(k<.5?u:v));
   }return values;
  }
  return {...frames.at(-1).values};
