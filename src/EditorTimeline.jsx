@@ -54,7 +54,7 @@ export default function EditorTimeline({
   else if(clip){const offset=Number(e.dataTransfer.getData('application/x-acs-offset'))||0;onMove(clip,track.id,seconds-offset)}
   else if(transition){const target=clips.filter(c=>c.kind!=='motion'&&c.trackId===track.id).sort((a,b)=>Math.abs(a.start-seconds)-Math.abs(b.start-seconds))[0];if(target)onTransition(target.id,transition,.7)}
  };
- function beginTrim(e,clip,side){e.preventDefault();e.stopPropagation();onSelect(clip.id);onTrimStart?.();trimRef.current={id:clip.id,side,x:e.clientX,original:clip};e.currentTarget.setPointerCapture(e.pointerId)}
+ function beginTrim(e,clip,side){if(clip.locked)return;e.preventDefault();e.stopPropagation();onSelect(clip.id);onTrimStart?.();trimRef.current={id:clip.id,side,x:e.clientX,original:clip};e.currentTarget.setPointerCapture(e.pointerId)}
  function updateTrim(e){if(!trimRef.current)return;const r=trimRef.current;onTrim(r.id,r.side,(e.clientX-r.x)/zoom,r.original)}
  function endTrim(e){trimRef.current=null;try{e.currentTarget.releasePointerCapture(e.pointerId)}catch{}}
  function seekFrom(e){const rect=rulerRef.current?.getBoundingClientRect();if(!rect)return;onSeek(Math.max(0,(e.clientX-rect.left)/zoom))}
@@ -123,10 +123,10 @@ export default function EditorTimeline({
        {clips.filter(c=>c.trackId===track.id).map(clip=>{
         const asset=assets.find(a=>a.id===clip.assetId),left=clip.start*zoom,span=Math.max(28,clipLength(clip)*zoom);
         const chosen=clip.id===selectedId;
-        return <div key={clip.id} className={'ve-clip '+(chosen?'ve-clip-selected ':'')+'ve-'+(clip.kind==='motion'?'motion':track.kind)}
+        return <div key={clip.id} className={'ve-clip '+(chosen?'ve-clip-selected ':'')+(clip.locked?'ve-clip-locked ':'')+'ve-'+(clip.kind==='motion'?'motion':track.kind)}
          data-clip-id={clip.id}
          style={{left,width:span,zIndex:chosen?20:Math.round(clip.start)+1,...(asset?.thumbnail?{backgroundImage:'linear-gradient(90deg,rgba(18,28,47,.74),rgba(18,28,47,.5)),url("'+asset.thumbnail+'")',backgroundSize:'cover',backgroundPosition:'center'}:{})}}
-         draggable
+         draggable={!clip.locked}
          onDragStart={e=>{e.dataTransfer.setData('application/x-acs-clip',clip.id);e.dataTransfer.setData('application/x-acs-offset',String((e.clientX-e.currentTarget.getBoundingClientRect().left)/zoom));e.dataTransfer.effectAllowed='move';onSelect(clip.id)}}
          onDragOver={e=>e.preventDefault()}
          onDrop={e=>{const tr=e.dataTransfer.getData('application/x-acs-transition');if(tr){e.preventDefault();e.stopPropagation();onTransition(clip.id,tr,.7)}}}
@@ -159,6 +159,8 @@ export default function EditorTimeline({
   {menu&&createPortal(<div role="menu" aria-label="Timeline actions" className="ve-timeline-context" style={{left:menu.x,top:menu.y}} onPointerDown={e=>e.stopPropagation()}>
     {menu.overlapId&&<div className="ve-context-note">Automatic crossfade — move clips apart to remove.</div>}
     {menu.clipId&&<>
+     {menuButton(clips.find(c=>c.id===menu.clipId)?.locked?'Unlock clip':'Lock clip',
+       ()=>onPatch(menu.clipId,{locked:!clips.find(c=>c.id===menu.clipId)?.locked}))}
      {menuButton('✂ Split at playhead',()=>onSplit(menu.clipId))}
      {menuButton('↤ Ripple delete and close gap',()=>onRippleDelete(menu.clipId))}
      {clips.find(c=>c.id===menu.clipId)?.kind==='video'&&!menu.trackId.startsWith('A')&&menuButton('♫ Detach audio into audio track',()=>onDetachAudio(menu.clipId))}
