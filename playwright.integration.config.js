@@ -17,7 +17,7 @@ export default defineConfig({
   viewport:{width:1440,height:900},
   video:'on',
   screenshot:'on',
-  trace:'on'
+  trace:'off'
  },
  webServer:{
   command:'NODE_ENV=test node tests/fixtures/integrationServer.js',
