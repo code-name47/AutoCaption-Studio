@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit';
 import {requireGoogleAccount,getGoogleAccount} from './google-auth.js';
 import {mcpIdentity,oauthChallenge} from './mcp-oauth.js';
 import {EDITOR_ACTION_DESCRIPTION} from '../src/aiEditCommands.js';
+import {storeVisualReview,readVisualReview,clearVisualReview,visualReviewMcpContent} from './editorVisualReview.js';
 import {visibleEditorSnapshot,publishEditorSnapshot,proposeEditorEdits,pendingEditorEdit,
  getEditorEdit,reviewEditorEdit,progressEditorEdit,demoEditorEdit} from './editorBridge.js';
 const router=Router();
@@ -109,6 +110,18 @@ function safeRoute(handler){
 router.post('/editor/snapshot',find,safeRoute((req,res)=>{
  res.json(publishEditorSnapshot(req.bridge,req.body?.project));
 }));
+// A person must click Share preview frames in the paired browser. This is never
+// triggered by an MCP tool or silently uploaded from a video file.
+router.post('/editor/review',find,safeRoute((req,res)=>{
+ res.status(201).json(storeVisualReview(req.bridge,req.body));
+}));
+router.delete('/editor/review',find,safeRoute((req,res)=>{
+ res.json({cleared:clearVisualReview(req.bridge)});
+}));
+router.get('/editor/review',find,safeRoute((req,res)=>{
+ const proof=readVisualReview(req.bridge);
+ res.json({shared:Boolean(proof),expiresAt:proof?.expires||null,frames:proof?.frames.length||0});
+}));
 router.get('/editor/pending',find,safeRoute((req,res)=>{
  res.json(pendingEditorEdit(req.bridge));
 }));
@@ -125,7 +138,7 @@ router.get('/editor/edits/:id',find,safeRoute((req,res)=>{
  res.json(getEditorEdit(req.bridge,req.params.id));
 }));
 // Stateless MCP JSON-RPC endpoint. Every request must carry the short-lived bridge bearer token.
-// No media is uploaded through MCP: the paired browser must already have a local file selected.
+// Source media is never uploaded through MCP. Only explicitly shared, downscaled still frames are returned by the optional private visual-review action.
 router.post('/mcp',find,(req,res)=>{
  const body=req.body;
  if(!body||body.jsonrpc!=='2.0'||typeof body.method!=='string')return res.status(400).json({error:'Invalid JSON-RPC request'});
@@ -139,7 +152,8 @@ router.post('/mcp',find,(req,res)=>{
   {name:'queue_transcription',description:'Transcribe an imported video or audio by asset_id in the paired browser using local Whisper. Choose the asset_id from get_editor_project. Results include timestamped dialogue segments for montage planning; no media bytes leave the browser. Browser must remain open.',inputSchema:{type:'object',properties:{asset_id:{type:'string'},model:{type:'string',enum:['tiny','base','small']}},required:['asset_id'],additionalProperties:false}},
   {name:'get_transcription',description:'Read the status and, when completed, the transcript of a job in this private session.',inputSchema:{type:'object',properties:{job_id:{type:'string'}},required:['job_id'],additionalProperties:false}},
   {name:'list_transcriptions',description:'List jobs for this private bridge session.',inputSchema:{type:'object',properties:{},additionalProperties:false}},
-  {name:'get_editor_project',description:'Read the project metadata currently visible in the connected AutoCaption Studio editor (timeline clips, media names, track IDs, and canvas). Does not read media bytes. Browser must remain open.',inputSchema:{type:'object',properties:{},additionalProperties:false}},
+  {name:'get_editor_project',description:'Read current timeline clip metadata (no source video). If the user explicitly clicked Share preview frames, also return up to six user-approved, temporary downscaled JPEG preview images and timing diagnostics.',inputSchema:{type:'object',properties:{},additionalProperties:false}},
+  {name:'get_editor_visual_review',description:'Read only the explicit user-shared, temporary preview JPEGs and timing diagnostics from the connected editor. Does not request or upload video. If none shared, instruct the user to click Share preview frames in their editor.',inputSchema:{type:'object',properties:{},additionalProperties:false}},
   {name:'propose_editor_edits',description:'Submit 1–12 validated edit commands for the user to review in the connected browser. NOTHING executes until the user clicks Approve. Commands: '+EDITOR_ACTION_DESCRIPTION,inputSchema:{type:'object',properties:{summary:{type:'string'},actions:{type:'array',minItems:1,maxItems:12,items:{type:'object',properties:{type:{type:'string'}},required:['type']}}},required:['summary','actions'],additionalProperties:false}},
   {name:'get_editor_edit_status',description:'Read whether an AI edit proposal is awaiting approval, applying step-by-step, completed, rejected, or stale.',inputSchema:{type:'object',properties:{edit_id:{type:'string'}},required:['edit_id'],additionalProperties:false}}
 
@@ -168,7 +182,14 @@ router.post('/mcp',find,(req,res)=>{
  if(name==='list_transcriptions')return output({jobs:[...req.bridge.jobs.values()].map(({id,status,asset_id,asset_name,model,createdAt,error})=>({id,status,asset_id,asset_name,model,createdAt,error}))});
  if(name==='get_editor_project'){
   const data=visibleEditorSnapshot(req.bridge);
-  return data.connected?output({connected:true,revision:data.revision,project:data.project}):output({error:'No active browser. Open AutoCaption Studio and connect this AI bridge to inspect the timeline.'},true);
+  if(!data.connected)return output({error:'No active browser. Open AutoCaption Studio and connect this AI bridge to inspect the timeline.'},true);
+  const content=[{type:'text',text:JSON.stringify({connected:true,revision:data.revision,project:data.project})},
+   ...visualReviewMcpContent(req.bridge)];
+  return reply({content,isError:false});
+ }
+ if(name==='get_editor_visual_review'){
+  const content=visualReviewMcpContent(req.bridge);
+  return content.length?reply({content,isError:false}):output({error:'No preview frames were shared. The user must click Share preview frames with ChatGPT in the connected editor. Frames are opt-in and expire after five minutes.'},true);
  }
  if(name==='propose_editor_edits'){
   try{
