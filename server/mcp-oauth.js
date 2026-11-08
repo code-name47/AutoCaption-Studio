@@ -8,12 +8,12 @@ import rateLimit from 'express-rate-limit';
 import {getGoogleAccount} from './google-auth.js';
 
 const router=Router();
-const clients=new Map(),requests=new Map(),codes=new Map(),access=new Map(),refresh=new Map();
+const requests=new Map(),codes=new Map(),access=new Map(),refresh=new Map();
 const rand=()=>crypto.randomBytes(32).toString('base64url');
 const digest=token=>crypto.createHash('sha256').update(token).digest('base64url');
 const now=()=>Date.now();
 const CODE_TTL=120000,REQUEST_TTL=600000,ACCESS_TTL=3600000,REFRESH_TTL=7*86400000;
-const LIMIT={clients:200,requests:500,codes:500,access:1000,refresh:1000};
+const LIMIT={requests:500,codes:500,access:1000,refresh:1000};
 const scopes=['editor.read','editor.write'];
 const origin=()=>process.env.APP_ORIGIN||new URL(process.env.GOOGLE_REDIRECT_URI||'http://localhost:3001/auth/google/callback').origin;
 const resource=()=>origin()+'/api/bridge/mcp';
@@ -34,9 +34,12 @@ function parseScopes(value){
  if(!list.length||list.some(s=>!scopes.includes(s)))return null;
  return [...new Set(list)];
 }
+// The public OAuth client ID deterministically represents a validated ChatGPT
+// callback. DCR registration therefore survives a Render restart without needing
+// to store any user credentials, secrets, or client records in memory.
+const clientForRedirect=uri=>'acs_'+digest('chatgpt-client:'+uri);
 function allowedClient(clientId,redirectUri){
- const c=clients.get(clientId);
- return Boolean(c&&c.redirectUris.includes(redirectUri)&&validRedirect(redirectUri));
+ return Boolean(validRedirect(redirectUri)&&clientId===clientForRedirect(redirectUri));
 }
 function requestParams(query){
  const {response_type,client_id,redirect_uri,code_challenge_method,code_challenge,resource:aud,scope,state}=query;
@@ -87,14 +90,12 @@ router.get('/.well-known/oauth-authorization-server',(req,res)=>res.json({
 const registerLimiter=rateLimit({windowMs:15*60000,limit:10,standardHeaders:'draft-7',legacyHeaders:false});
 router.post('/oauth/register',registerLimiter,express.json({limit:'20kb'}),(req,res)=>{
  const b=req.body;
- if(!b||!Array.isArray(b.redirect_uris)||b.redirect_uris.length<1||b.redirect_uris.length>5
+ if(!b||!Array.isArray(b.redirect_uris)||b.redirect_uris.length!==1
   ||!b.redirect_uris.every(validRedirect)
   ||(b.token_endpoint_auth_method&&b.token_endpoint_auth_method!=='none')
   ||(b.grant_types&&!b.grant_types.includes('authorization_code')))
   return denial(res,400,'invalid_client_metadata');
- try{limited(clients,LIMIT.clients)}catch{return denial(res,429,'too_many_clients')}
- const clientId='acs_'+rand();
- clients.set(clientId,{redirectUris:[...new Set(b.redirect_uris)],createdAt:now()});
+ const clientId=clientForRedirect(b.redirect_uris[0]);
  return res.status(201).json({client_id:clientId,client_id_issued_at:Math.floor(now()/1000),
   redirect_uris:[...new Set(b.redirect_uris)],token_endpoint_auth_method:'none',
   grant_types:['authorization_code','refresh_token'],response_types:['code'],
@@ -150,7 +151,7 @@ router.post('/oauth/authorize',oauthLimiter,express.urlencoded({extended:false,l
 const tokenLimiter=rateLimit({windowMs:15*60000,limit:100,standardHeaders:'draft-7',legacyHeaders:false});
 router.post('/oauth/token',tokenLimiter,express.urlencoded({extended:false,limit:'8kb'}),(req,res)=>{
  const b=req.body||{},method=b.grant_type;
- if(typeof b.client_id!=='string'||!clients.has(b.client_id))return denial(res,401,'invalid_client');
+ if(typeof b.client_id!=='string'||!b.client_id.startsWith('acs_'))return denial(res,401,'invalid_client');
  if(b.resource!==resource())return denial(res,400,'invalid_target');
  if(method==='authorization_code'){
   if(typeof b.code!=='string'||typeof b.redirect_uri!=='string'||typeof b.code_verifier!=='string')
