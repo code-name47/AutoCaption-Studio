@@ -89,11 +89,11 @@ export default function useLiveAIEditor({token,project,onStart,onStep,onRestore,
     // The playhead, preview and timeline repaint between each operation.
     if(done<pending.actions.length)await delay(WAIT_BETWEEN_STEPS);
    }
+   // The busy guard prevents per-frame uploads. Publish the final state explicitly.
+   await request('/editor/snapshot',{method:'POST',body:JSON.stringify({project:current})});
    await request('/editor/edits/'+encodeURIComponent(pending.id)+'/progress',{
     method:'POST',body:JSON.stringify({status:'complete',progress:done})
    });
-   // The busy guard prevents per-frame uploads. Publish the final state explicitly.
-   await request('/editor/snapshot',{method:'POST',body:JSON.stringify({project:current})});
    setRecent({id:pending.id,summary:pending.summary,before:original,after:current});
    setProgress({index:done,total:done,description:'All edits applied'});
    setReview(null);context.current.onNotice?.('AI edit applied. Review the timeline, then save the project.');
