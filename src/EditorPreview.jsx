@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {activeClips,clipEnd,renderOpacity,transitionProgress,trackFor} from './editorCore.js';
-import {resolvedClip,visualClipOpacity,audioClipGain,clamp,captureMotion} from './editorMotion.js';
+import {resolvedClip,visualClipOpacity,audioClipGain,clamp,captureMotion,risingTextPosition} from './editorMotion.js';
 
 const between=(n,a,b)=>Math.min(b,Math.max(a,n));
 function layerStyle(clip,time,clips){
@@ -98,7 +98,7 @@ export default function EditorPreview({
  const fitWidth=Math.min(available.w*.92,available.h*.84*ratio);
  const frameWidth=Math.max(60,fitWidth*clamp(viewZoom/100,.3,1.6));
  const frameStyle={width:frameWidth+'px',height:(frameWidth/ratio)+'px',aspectRatio:String(ratio),maxHeight:'none',maxWidth:'none'};
- const guide=selected&&selectionGeometry(selected,size);
+ const guide=selected&&selectionGeometry(selected.kind==='text'&&selected.transitionIn==='rise'?{...selected,positionY:risingTextPosition(selected,time)}:selected,size);
  const offscreen=guide&&(guide.left<0||guide.left>100||guide.top<0||guide.top>100);
  return <div className="ve-stage-pasteboard" ref={pasteboard}>
   <div ref={stage} className="ve-stage-frame" data-aspect={aspect} style={frameStyle}>
@@ -111,7 +111,7 @@ export default function EditorPreview({
      if(clip.kind==='text'){
       const cssSize=Math.max(.5,(Number(clip.fontSize)||1)*size.w/1280);
       return <div key={clip.id} {...common} className={'ve-stage-text '+(active?'ve-selected-layer':'')} style={{
-       ...position,top:(Number(clip.positionY)+Number(clip.offsetY||0))+'%',
+       ...position,top:(risingTextPosition(clip,time)+Number(clip.offsetY||0))+'%',
        left:(50+Number(clip.offsetX||0))+'%',transform:'translate(-50%,-50%) scale('+clip.scale+') rotate('+clip.rotation+'deg)',
        fontSize:cssSize+'px',lineHeight:1.3,
        fontFamily:clip.fontFamily,color:clip.fontColor,fontWeight:clip.fontWeight,
