@@ -6,6 +6,7 @@ import EditorPreview from './EditorPreview.jsx';
 import EditorTimeline from './EditorTimeline.jsx';
 import EditorInspector from './EditorInspector.jsx';
 import {renderProjectToWebM} from './editorExport.js';
+import {makeMediaThumbnail} from './mediaThumbnails.js';
 import './editorWorkspace.css';
 
 const uid=()=>globalThis.crypto?.randomUUID?.()||'id-'+Math.random().toString(36).slice(2);
@@ -112,6 +113,11 @@ export default function EditorWorkspace(){
  function trim(id,edge,delta,original){const asset=assets.find(x=>x.id===original.assetId);setClips(cs=>cs.map(c=>c.id===id?trimClip(original,edge,delta,asset?.duration):c))}
  function transition(id,type,duration){record();setClips(cs=>addTransition(cs,id,type,duration));setSelectedId(id);note(type==='none'?'Transition removed':type+' transition applied')}
  function addTrack(kind){const prefix=kind==='audio'?'A':'V',count=tracks.filter(t=>t.id.startsWith(prefix)).length;if(count>=12){note('Maximum 12 '+kind+' tracks');return}const number=tracks.reduce((m,t)=>t.id.startsWith(prefix)?Math.max(m,Number(t.id.slice(1))):m,0)+1;const track={id:prefix+number,label:(kind==='audio'?'Audio ':'Video ')+number,kind,z:kind==='audio'?0:number*10};setTracks(old=>kind==='audio'?[...old,track]:[track,...old]);note('Added '+track.label)}
+ function populateThumbnails(items){
+  for(const a of items)makeMediaThumbnail(a.url,a.kind).then(thumb=>{
+   if(thumb)setAssets(current=>current.map(x=>x.id===a.id?{...x,thumbnail:thumb}:x));
+  }).catch(()=>{});
+ }
  function addTitle(text='Your title',trackId='T1',seconds=3){
   const asset={id:uid(),name:text.slice(0,30),kind:'text',duration:seconds,text,type:'text/plain',source:'generated',transcript:[]};
   const c=newClip(asset,trackId,timeRef.current,uid());c.text=text;c.outPoint=seconds;c.fontSize=trackId==='C1'?30:52;c.positionY=trackId==='C1'?85:50;
@@ -127,7 +133,7 @@ export default function EditorWorkspace(){
    const duration=await measureMedia(f,url,kind);
    collected.push({id:uid(),name:f.name,kind,type:f.type||'',duration,source,driveId:driveIds[f.name]||null,file:f,url,transcript:[]});
   }
-  setAssets(a=>[...a,...collected]);if(collected.length)setSelectedAssetId(collected[0].id);
+  setAssets(a=>[...a,...collected]);populateThumbnails(collected);if(collected.length)setSelectedAssetId(collected[0].id);
   note(collected.length+' files added to Project Files. Drag them to a track.');
   }catch(e){note(e.message||'Media import failed')}finally{fileImportActive.current=false;setBusy(false)}
  }
@@ -198,7 +204,7 @@ export default function EditorWorkspace(){
   try{const p=await loadBrowserProject();if(!p){note('No saved project found in this browser.');return}
    if(!isValidProject(p))throw Error('Saved project format is invalid');
    setPlaying(false);for(const a of assetRef.current)if(a.url)URL.revokeObjectURL(a.url);
-   setAssets(p.assets);setClips(p.clips);setName(p.name);
+   setAssets(p.assets);populateThumbnails(p.assets.filter(a=>a.url));setClips(p.clips);setName(p.name);
    setSettings({aspect:p.settings?.aspect||'16:9',fps:Number(p.settings?.fps)||30});
    setTracks(Array.isArray(p.settings?.tracks)&&p.settings.tracks.length?p.settings.tracks:TRACKS);
    setTrackMuted(p.settings?.trackMuted||{});
@@ -253,7 +259,7 @@ export default function EditorWorkspace(){
      <div className="ve-media-items">{assets.length===0?<div className="ve-empty-bin">No media yet. Import videos, audio, or images to begin.</div>:assets.map(a=><div key={a.id} className={'ve-media-item '+(selectedAssetId===a.id?'selected':'')} draggable
       onDragStart={e=>{e.dataTransfer.setData('application/x-acs-asset',a.id);e.dataTransfer.effectAllowed='copy'}}
       onClick={()=>{setSelectedAssetId(a.id);setSourceViewer(true);setPlaying(false)}}>
-       <div className="ve-media-icon">{a.kind==='audio'?'♫':a.kind==='image'?'▧':'▶'}</div><div className="ve-media-info"><strong title={a.name}>{a.name}</strong><small>{a.kind} · {timeLabel(a.duration)}{a.transcript?.length?' · captions':''}</small></div>
+       <div className="ve-media-icon">{a.thumbnail?<img src={a.thumbnail} alt=""/>:a.kind==='audio'?'♫':a.kind==='image'?'▧':'▶'}</div><div className="ve-media-info"><strong title={a.name}>{a.name}</strong><small>{a.kind} · {timeLabel(a.duration)}{a.transcript?.length?' · captions':''}</small></div>
        <button title="Add to timeline" onClick={e=>{e.stopPropagation();placeAsset(a.id,a.kind==='audio'?'A1':'V1',timelineDuration(clips))}}>+</button>
       </div>)}</div>
     </>}
