@@ -46,6 +46,11 @@ export function applyEditorAction(project,action){
  assert(project.clips.length<=3000&&project.assets.length<=500,'Project too large');
  assert(action&&typeof action==='object'&&!Array.isArray(action),'Invalid action');
  const p=project,a=action;
+ if(typeof a.clip_id==='string'){
+  const selected=p.clips.find(c=>c.id===a.clip_id);
+  if(selected?.locked&&!(a.type==='set_clip_property'&&a.property==='locked'&&a.value===false))
+   throw new Error('Unlock the clip before editing it.');
+ }
  let updated,description,focus,selectedId;
  switch(a.type){
  case 'set_canvas':{
