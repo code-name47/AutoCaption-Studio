@@ -36,7 +36,8 @@ export function editorProjectSnapshot({name,assets,clips,settings,tracks}){
   version:2,name:String(name||'Untitled project').slice(0,90),
   assets:assets.map(a=>({id:a.id,name:a.name,kind:a.kind,duration:a.duration})),
   clips:clips.map(c=>({...c})),
-  settings:{aspect:settings.aspect||'16:9',fps:settings.fps||30,tracks:tracks||TRACKS}
+  settings:{aspect:settings.aspect||'16:9',fps:settings.fps||30,tracks:tracks||TRACKS,
+   markers:Array.isArray(settings.markers)?settings.markers.slice(0,250).map(m=>({id:String(m.id).slice(0,120),time:Number(m.time),label:String(m.label).slice(0,80)})):[]}
  };
 }
 
