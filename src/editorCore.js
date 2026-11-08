@@ -80,7 +80,7 @@ export function addTransition(clips,id,type,duration){
 }
 export const serializeProject=(name,assets,clips,settings={})=>({
  version:2,name,settings,
- assets:assets.map(({id,name,type,kind,duration,source,driveId,transcript})=>({id,name,type,kind,duration,source,driveId,transcript})),
+ assets:assets.map(({id,name,type,kind,duration,source,driveId,transcript,waveform})=>({id,name,type,kind,duration,source,driveId,transcript,waveform:Array.isArray(waveform)?waveform.slice(0,160):null})),
  clips:clips.map(c=>({...c}))
 });
 export function isValidProject(p){
