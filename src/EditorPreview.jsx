@@ -3,6 +3,7 @@ import {activeClips,clipEnd,renderOpacity,transitionProgress,trackFor} from './e
 import {resolvedClip,visualClipOpacity,audioClipGain,clamp,captureMotion,risingTextPosition} from './editorMotion.js';
 import {attachAudioGraph,audioTrackEnabled} from './editorAudio.js';
 import ChromaLayer from './ChromaLayer.jsx';
+import {cropClipPath} from './editorEnhancements.js';
 
 const between=(n,a,b)=>Math.min(b,Math.max(a,n));
 function layerStyle(clip,time,clips){
@@ -11,7 +12,7 @@ function layerStyle(clip,time,clips){
  const style={opacity:between(alpha,0,1),zIndex:trackFor(clip.trackId)?.z||1,
   transform:'translate('+clip.offsetX+'%, '+clip.offsetY+'%) scale('+clip.scale+') rotate('+clip.rotation+'deg)',
   filter:'brightness('+clip.brightness+') contrast('+clip.contrast+') saturate('+clip.saturation+') hue-rotate('+(clip.hueRotate??0)+'deg) blur('+(clip.blur??0)+'px)'};
- if(clip.transitionIn==='wipe')style.clipPath='inset(0 '+((1-progress)*100)+'% 0 0)';
+ if(clip.kind==='video'||clip.kind==='image')style.clipPath=cropClipPath(clip,clip.transitionIn==='wipe'?(1-progress)*100:0);
  if(clip.transitionIn==='slide')style.transform='translateX('+((1-progress)*100)+'%) '+style.transform;
  return style;
 }
