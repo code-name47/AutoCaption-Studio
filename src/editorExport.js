@@ -1,5 +1,6 @@
 import {activeClips,clipEnd,transitionProgress,timelineDuration,trackFor} from './editorCore.js';
 import {resolvedClip,visualClipOpacity,audioClipGain,risingTextPosition} from './editorMotion.js';
+import {attachAudioGraph,audioTrackEnabled} from './editorAudio.js';
 
 const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
 function supportedMime(){
@@ -54,7 +55,7 @@ function paintClip(ctx,clip,node,time,width,height,clips){
  else if(node&&(clip.kind==='image'||node.readyState>=2))try{fitDraw(ctx,node,width,height)}catch{}
  ctx.restore();
 }
-export async function renderProjectToWebM({assets,clips,settings={},trackMuted={},onProgress=()=>{}}){
+export async function renderProjectToWebM({assets,clips,settings={},trackMuted={},trackSolo={},onProgress=()=>{}}){
  const duration=timelineDuration(clips);
  if(duration<=0)throw Error('The timeline is empty.');
  if(duration>600)throw Error('This browser renderer currently supports timelines up to 10 minutes.');
@@ -88,8 +89,9 @@ export async function renderProjectToWebM({assets,clips,settings={},trackMuted={
     if(AudioContextClass){
      audioContext=new AudioContextClass();audioDestination=audioContext.createMediaStreamDestination();
      for(const [id,element] of elements){
-      const src=audioContext.createMediaElementSource(element),gain=audioContext.createGain();
-      src.connect(gain);gain.connect(audioDestination);audioNodes.set(id,gain);
+      const clip=clips.find(c=>c.id===id);
+      const route=attachAudioGraph(audioContext,element,audioDestination,clip);
+      audioNodes.set(id,route);
      }
      for(const tr of audioDestination.stream.getAudioTracks())stream.addTrack(tr);
      await audioContext.resume();
@@ -113,12 +115,12 @@ export async function renderProjectToWebM({assets,clips,settings={},trackMuted={
      const activeIds=new Set(active.map(c=>c.id));
      for(const [id,element] of elements){
       const clip=clips.find(c=>c.id===id),enabled=activeIds.has(id);
-      if(!enabled){if(!element.paused)element.pause();const gain=audioNodes.get(id);if(gain)gain.gain.value=0;continue}
+      if(!enabled){if(!element.paused)element.pause();audioNodes.get(id)?.setGain(0);continue}
       const desired=clamp(clip.inPoint+(t-clip.start)*clip.speed,clip.inPoint,clip.outPoint);
       if(Math.abs(element.currentTime-desired)>.25){try{element.currentTime=desired}catch{}}
       element.playbackRate=clamp(clip.speed||1,.25,4);
-      const gain=audioNodes.get(id);
-      if(gain)gain.gain.value=trackMuted[clip.trackId]?0:audioClipGain(resolvedClip(clip,clips,t),clips,t);
+      const route=audioNodes.get(id);
+      if(route){const current=resolvedClip(clip,clips,t);route.update(current);route.setGain(audioTrackEnabled(clip.trackId,trackMuted,trackSolo)?audioClipGain(current,clips,t):0)}
       if(element.paused)element.play().catch(()=>{});
      }
      for(const clip of active){
@@ -143,6 +145,7 @@ export async function renderProjectToWebM({assets,clips,settings={},trackMuted={
   if(recorder?.state==='recording')try{recorder.stop()}catch{}
   for(const element of elements.values()){element.pause();element.removeAttribute('src');element.load()}
   if(stream)for(const track of stream.getTracks())track.stop();
+  for(const route of audioNodes.values())route.dispose();
   if(audioContext)await audioContext.close().catch(()=>{});
  }
 }
