@@ -23,7 +23,10 @@ export function newClip(asset,trackId,start=0,id='clip-'+Math.random().toString(
   transitionIn:'none',transitionDuration:.7,fadeOut:0,
   scale:1,offsetX:0,offsetY:0,rotation:0,brightness:1,contrast:1,saturation:1,
   text:asset?.kind==='text'?(asset.text||'Your title'):'',fontSize:asset?.kind==='text'?48:36,
-  fontColor:'#ffffff',fontFamily:'Arial',fontWeight:700,positionY:50};
+  fontColor:'#ffffff',fontFamily:'Arial',fontWeight:700,positionY:50,
+  audioChannel:'stereo',pan:0,eqLow:0,eqMid:0,eqHigh:0,
+  chromaKey:false,chromaColor:'#00ff00',chromaTolerance:.18,chromaSoftness:.12,
+  textOutlineColor:'#000000',textOutlineWidth:0,textShadow:.9,hueRotate:0,blur:0};
 }
 export const roundTime=n=>Math.max(0,Math.round(n*100)/100);
 export function snapTime(t,clips,excludeId,threshold=.16){
