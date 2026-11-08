@@ -14,6 +14,16 @@ The default route (/) opens the full-screen editor. The original transcription i
 
 The layout docks tools around a preview monitor with internal panel and timeline scrolling. Expand the timeline for detailed work.
 
+## Resizable workspace and playhead
+
+- Drag the thin vertical grip **between Project Files and the preview** to change the width of the media bin; the preview automatically takes the available space.
+- Drag the divider **between the preview and Inspector** to make the preview wider or Inspector narrower.
+- Drag the **horizontal divider immediately above the timeline** up or down to choose how much screen space the timeline receives.
+- Panel dimensions are remembered for this browser between reloads. Double-click a divider, or choose **Reset panels** in the top bar, to restore default sizes. Use arrow keys when a divider is focused to resize in 10 px increments (Shift+arrow for 30 px).
+- The **Canvas zoom** slider above the preview supports zooming past 100% for detailed editing. This only affects the workspace view, not the exported video resolution.
+- The gold playhead marker in the timeline ruler and the gold line above the tracks can both be dragged to scrub. The line stays above the clips and uses pointer capture, so it will not accidentally select caption or clip labels. The playhead supports left/right arrow keys for fine adjustments.
+
+
 
 ## Direct canvas manipulation
 
