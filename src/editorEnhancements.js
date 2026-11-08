@@ -72,3 +72,31 @@ export function chromaOpacity(r,g,b,keyR,keyG,keyB,tolerance=.25,softness=.12){
  const k=Math.max(0,Math.min(1,(distance-low)/(high-low)));
  return k*k*(3-2*k);
 }
+
+/** Keep detached audio's source timing in lockstep with the video when linked. */
+export function syncLinkedAudio(clips,videoId){
+ const source=clips.find(c=>c.id===videoId&&c.kind==='video'&&!c.trackId.startsWith('A'));
+ if(!source)return clips;
+ return clips.map(c=>c.linkedSourceId===videoId&&c.kind==='audio'?{
+  ...c,start:source.start,inPoint:source.inPoint,outPoint:source.outPoint,speed:source.speed
+ }:c);
+}
+
+/** Linked split: create a corresponding audio section for the new video half. */
+export function splitLinkedVideoAudio(clips,videoId,parts,newAudioId){
+ const original=clips.find(c=>c.id===videoId);
+ if(!original||!parts?.length||parts.length!==2)return clips;
+ const linked=clips.filter(c=>c.kind==='audio'&&c.linkedSourceId===videoId);
+ if(!linked.length)return clips;
+ const extra=linked.map((audio,i)=>({...audio,id:i===0?newAudioId:newAudioId+'-'+i,
+  linkedSourceId:parts[1].id,start:parts[1].start,inPoint:parts[1].inPoint,
+  outPoint:parts[1].outPoint,speed:parts[1].speed}));
+ return [...syncLinkedAudio(clips,videoId),...extra];
+}
+
+export function removeLinkedWithVideo(clips,id){
+ const target=clips.find(c=>c.id===id);
+ if(target?.kind==='video'&&!target.trackId.startsWith('A'))
+  return clips.filter(c=>c.id!==id&&c.linkedSourceId!==id);
+ return clips.filter(c=>c.id!==id);
+}
