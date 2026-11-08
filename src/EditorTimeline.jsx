@@ -5,7 +5,7 @@ import {overlaps} from './editorMotion.js';
 const CLOCK=n=>{const m=Math.floor(n/60),s=Math.floor(n%60);return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')};
 export default function EditorTimeline({
  tracks=TRACKS,clips,assets,time,zoom,setZoom,onSeek,onSelect,selectedId,onPlace,onMove,onTrim,onTrimStart,
- onTransition,onRemove,onAddTrack,onRemoveTrack,onSplit,onDuplicate,onAddTitle,
+ onTransition,onRemove,onAddTrack,onRemoveTrack,onSplit,onDuplicate,onAddTitle,onPatch,
  trackMuted,onToggleTrackMute,recordingTrackId,onToggleRecord,onOpenInspector
 }){
  const [dragHint,setDragHint]=useState(''),[expanded,setExpanded]=useState(false),[menu,setMenu]=useState(null);
@@ -111,6 +111,11 @@ export default function EditorTimeline({
      {menuButton('◐ Fade in',()=>onTransition(menu.clipId,'fade',.7))}
      {menuButton('▧ Wipe transition',()=>onTransition(menu.clipId,'wipe',.7))}
      {menuButton('✕ Remove transition',()=>onTransition(menu.clipId,'none',.7))}
+     <hr/>
+     {menuButton('☼ Add brighten effect',()=>onPatch(menu.clipId,{brightness:1.25}))}
+     {menuButton('◐ Add monochrome effect',()=>onPatch(menu.clipId,{saturation:0}))}
+     {menuButton('◧ Add high contrast effect',()=>onPatch(menu.clipId,{contrast:1.45}))}
+     {menuButton('↺ Remove color effects',()=>onPatch(menu.clipId,{brightness:1,contrast:1,saturation:1}))}
      {menuButton('☷ Open effects & properties',()=>onOpenInspector(menu.clipId))}
      <hr/>
      {menuButton('🗑 Remove clip from track',()=>onRemove(menu.clipId))}
