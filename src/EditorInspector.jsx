@@ -1,0 +1,53 @@
+import React from 'react';
+import {clipEnd,clipLength,TRACKS} from './editorCore.js';
+const fmt=n=>(Number(n)||0).toFixed(2);
+function NumberInput({label,value,min=0,max=9999,step=.1,onChange}){
+ return <label className="ve-field"><span>{label}</span><input type="number" min={min} max={max} step={step} value={Number.isFinite(Number(value))?value:0} onChange={e=>{if(e.target.value!=='')onChange(Math.max(min,Math.min(max,Number(e.target.value))))}}/></label>;
+}
+function Range({label,value,min=0,max=2,step=.05,onChange}){
+ return <label className="ve-range"><span>{label}<b>{fmt(value)}</b></span><input type="range" min={min} max={max} step={step} value={value} onChange={e=>onChange(Number(e.target.value))}/></label>;
+}
+export default function EditorInspector({clip,asset,settings,onSettings,onPatch,onTransition,onSplit,onDelete,time}){
+ if(!clip)return <aside className="ve-inspector"><div className="ve-pane-heading"><b>Inspector</b><small>Project</small></div>
+   <div className="ve-inspector-body"><h4>Project settings</h4><label className="ve-field"><span>Canvas aspect</span><select value={settings.aspect} onChange={e=>onSettings({...settings,aspect:e.target.value})}><option>16:9</option><option>9:16</option><option>1:1</option></select></label>
+    <label className="ve-field"><span>Frame rate</span><select value={settings.fps} onChange={e=>onSettings({...settings,fps:Number(e.target.value)})}><option>24</option><option>25</option><option>30</option><option>60</option></select></label>
+    <p className="ve-note">Select a clip on the timeline to adjust its trim, speed, sound, color, and transitions.</p></div></aside>;
+ const duration=clipLength(clip);
+ const patch=(k,v)=>onPatch(clip.id,{[k]:v});
+ return <aside className="ve-inspector"><div className="ve-pane-heading"><b>Inspector</b><small>{clip.trackId}</small></div><div className="ve-inspector-body">
+  <h4 className="ve-inspector-title">{clip.kind==='text'?clip.text:asset?.name||'Selected clip'}</h4>
+  <div className="ve-inspector-tools"><button onClick={()=>onSplit(clip.id)}>✂ Split at playhead</button><button onClick={()=>onDelete(clip.id)}>Delete</button></div>
+  <details open><summary>Timing & trim</summary>
+   <NumberInput label="Position (s)" value={clip.start} step=".05" onChange={v=>patch('start',v)}/>
+   <NumberInput label="In point (s)" value={clip.inPoint} step=".05" max={Math.max(.1,clip.outPoint-.1)} onChange={v=>patch('inPoint',v)}/>
+   <NumberInput label="Out point (s)" value={clip.outPoint} step=".05" min={clip.inPoint+.1} max={Math.max(clip.outPoint,asset?.duration||clip.outPoint)} onChange={v=>patch('outPoint',v)}/>
+   <NumberInput label="Speed" value={clip.speed} min=".25" max="4" step=".05" onChange={v=>patch('speed',v)}/>
+   <p className="ve-note">Timeline duration: {fmt(duration)}s · End: {fmt(clipEnd(clip))}s</p>
+  </details>
+  {(clip.kind==='video'||clip.kind==='audio')&&<details open><summary>Audio</summary><label className="ve-field"><span>Mute clip</span><input type="checkbox" checked={clip.muted} onChange={e=>patch('muted',e.target.checked)}/></label><Range label="Volume" value={clip.volume} min="0" max="1" step=".01" onChange={v=>patch('volume',v)}/></details>}
+  {clip.kind!=='audio'&&<details open><summary>Transitions & fades</summary>
+   <label className="ve-field"><span>Entrance</span><select value={clip.transitionIn} onChange={e=>onTransition(clip.id,e.target.value,clip.transitionDuration)}>
+    <option value="none">Cut (none)</option><option value="crossfade">Cross dissolve</option><option value="fade">Fade in</option><option value="wipe">Wipe right</option><option value="slide">Slide in</option>
+   </select></label>
+   {clip.transitionIn!=='none'&&<NumberInput label="Transition (s)" min=".1" max="2" step=".1" value={clip.transitionDuration} onChange={v=>onTransition(clip.id,clip.transitionIn,v)}/>}
+   <NumberInput label="Fade out (s)" min="0" max="3" step=".1" value={clip.fadeOut} onChange={v=>patch('fadeOut',v)}/>
+  </details>}
+  {clip.kind==='text'&&<details open><summary>Text & caption</summary>
+   <label className="ve-stacked-field"><span>Text</span><textarea rows="4" value={clip.text} onChange={e=>patch('text',e.target.value)}/></label>
+   <label className="ve-field"><span>Text color</span><input type="color" value={clip.fontColor} onChange={e=>patch('fontColor',e.target.value)}/></label>
+   <NumberInput label="Font size" value={clip.fontSize} min="12" max="140" step="2" onChange={v=>patch('fontSize',v)}/>
+   <NumberInput label="Vertical position %" value={clip.positionY} min="0" max="100" step="2" onChange={v=>patch('positionY',v)}/>
+   <label className="ve-field"><span>Font</span><select value={clip.fontFamily} onChange={e=>patch('fontFamily',e.target.value)}><option>Arial</option><option>Verdana</option><option>Georgia</option><option>Impact</option><option>Tahoma</option></select></label>
+  </details>}
+  {clip.kind!=='audio'&&clip.kind!=='text'&&<details><summary>Transform & color</summary>
+   <Range label="Opacity" value={clip.opacity} min="0" max="1" step=".02" onChange={v=>patch('opacity',v)}/>
+   <Range label="Zoom / scale" value={clip.scale} min=".5" max="3" step=".05" onChange={v=>patch('scale',v)}/>
+   <Range label="Horizontal position" value={clip.offsetX} min="-100" max="100" step="1" onChange={v=>patch('offsetX',v)}/>
+   <Range label="Vertical position" value={clip.offsetY} min="-100" max="100" step="1" onChange={v=>patch('offsetY',v)}/>
+   <Range label="Rotation" value={clip.rotation} min="-180" max="180" step="1" onChange={v=>patch('rotation',v)}/>
+   <Range label="Brightness" value={clip.brightness} min=".2" max="2" step=".05" onChange={v=>patch('brightness',v)}/>
+   <Range label="Contrast" value={clip.contrast} min=".2" max="2" step=".05" onChange={v=>patch('contrast',v)}/>
+   <Range label="Saturation" value={clip.saturation} min="0" max="3" step=".05" onChange={v=>patch('saturation',v)}/>
+  </details>}
+ </div></aside>;
+}
