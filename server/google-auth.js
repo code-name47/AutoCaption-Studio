@@ -50,8 +50,8 @@ router.get('/me',(req,res)=>{const a=current(req);return res.set('Cache-Control'
 // Google Picker runs in the browser with a short-lived Google access token.
 // Only expose this token to the signed-in first-party page; never persist it client-side.
 function sameOrigin(req,res,next){const origin=req.get('Origin');if(origin&&origin!==new URL(redirect()).origin)return res.status(403).json({error:'Invalid origin'});next()}
-router.get('/picker-config',(req,res)=>{const a=current(req);if(!a)return res.status(401).json({error:'Connect Google first'});if(!process.env.GOOGLE_PICKER_API_KEY)return res.status(503).json({error:'GOOGLE_PICKER_API_KEY is missing in Render'});res.set('Cache-Control','no-store').json({accessToken:a.accessToken,apiKey:process.env.GOOGLE_PICKER_API_KEY,appId:process.env.GOOGLE_CLOUD_PROJECT_NUMBER||''})});
-router.get('/file/:id',async(req,res)=>{
+router.get('/picker-config',sameOrigin,(req,res)=>{const a=current(req);if(!a)return res.status(401).json({error:'Connect Google first'});if(!process.env.GOOGLE_PICKER_API_KEY)return res.status(503).json({error:'GOOGLE_PICKER_API_KEY is missing in Render'});res.set('Cache-Control','no-store').json({accessToken:a.accessToken,apiKey:process.env.GOOGLE_PICKER_API_KEY,appId:process.env.GOOGLE_CLOUD_PROJECT_NUMBER||''})});
+router.get('/file/:id',sameOrigin,async(req,res)=>{
  const a=current(req);if(!a)return res.status(401).json({error:'Connect Google first'});
  const fileId=req.params.id;
  if(!/^[a-zA-Z0-9_-]{10,160}$/.test(fileId))return res.status(400).json({error:'Invalid file ID'});
@@ -64,11 +64,15 @@ router.get('/file/:id',async(req,res)=>{
   const media=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(fileId)+'?alt=media',{headers:{Authorization:'Bearer '+a.accessToken},signal:AbortSignal.timeout(120000)});
   if(!media.ok)return res.status(502).json({error:'Could not download the selected Drive file'});
   res.set({'Content-Type':info.mimeType,'X-Media-Filename':encodeURIComponent(info.name||'drive-media'),'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
-  const bytes=await media.arrayBuffer();
-  if(bytes.byteLength>150*1024*1024)return res.status(413).end();
-  return res.end(Buffer.from(bytes));
+  const maxBytes=150*1024*1024;
+  const length=Number(media.headers.get('content-length'));
+  if(Number.isFinite(length)&&length>maxBytes)return res.status(413).end();
+  let total=0;
+  const chunks=[];
+  for await(const chunk of media.body){total+=chunk.byteLength;if(total>maxBytes)return res.status(413).end();chunks.push(Buffer.from(chunk));}
+  return res.end(Buffer.concat(chunks,total));
  }catch{return res.status(502).json({error:'Google Drive transfer failed'})}
 });
-router.post('/logout',(req,res)=>{const token=cookies(req)[cookieName];if(token)accounts.delete(digest(token));res.clearCookie(cookieName,{httpOnly:true,secure,sameSite:'lax',path:'/'});res.json({ok:true})});
+router.post('/logout',sameOrigin,(req,res)=>{const token=cookies(req)[cookieName];if(token)accounts.delete(digest(token));res.clearCookie(cookieName,{httpOnly:true,secure,sameSite:'lax',path:'/'});res.json({ok:true})});
 setInterval(()=>{for(const [k,v] of pending)if(v.expires<Date.now())pending.delete(k);for(const [k,v] of accounts)if(v.expires<Date.now())accounts.delete(k)},60000).unref();
 export default router;
