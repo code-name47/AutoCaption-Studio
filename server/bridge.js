@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import {Router} from 'express';
 import rateLimit from 'express-rate-limit';
 import {requireGoogleAccount,getGoogleAccount} from './google-auth.js';
+import {mcpIdentity,oauthChallenge} from './mcp-oauth.js';
 import {EDITOR_ACTION_DESCRIPTION} from '../src/aiEditCommands.js';
 import {visibleEditorSnapshot,publishEditorSnapshot,proposeEditorEdits,pendingEditorEdit,
  getEditorEdit,reviewEditorEdit,progressEditorEdit,demoEditorEdit} from './editorBridge.js';
@@ -15,7 +16,30 @@ const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
 const now=()=>Date.now();
 export function revokeBridgeSessionsForLogin(loginId){if(!loginId)return;for(const [key,session] of sessions){if(session.loginId===loginId)sessions.delete(key)}}
 export function bridgeAccessAllowed(session,account,viaMcp=false){return Boolean(session&&session.expires>now()&&(viaMcp||Boolean(account&&account.userId===session.ownerId&&account.loginId===session.loginId)))}
-function find(req,res,next){const auth=req.get('Authorization')||'';const key=auth.startsWith('Bearer ')?auth.slice(7):null;const session=key&&sessions.get(hash(key));if(!session||session.expires<=now()){return res.status(401).json({error:'Invalid or expired session'})}if(req.path!=='/mcp'&&req.method!=='OPTIONS'){const account=getGoogleAccount(req);if(!bridgeAccessAllowed(session,account))return res.status(403).json({error:'Bridge session does not belong to this signed-in user'});}req.bridge=session;next()}
+function find(req,res,next){
+ const auth=req.get('Authorization')||'';
+ const key=auth.startsWith('Bearer ')?auth.slice(7):null;
+ const session=key&&sessions.get(hash(key));
+ if(req.path==='/mcp'){
+  // OAuth access is tied to the Google identity; it cannot select another user's browser.
+  const identity=key&&mcpIdentity(key);
+  if(identity){
+   const eligible=[...sessions.values()].filter(s=>s.ownerId===identity.ownerId&&s.expires>now()
+    &&visibleEditorSnapshot(s).connected);
+   req.bridge=eligible.length===1?eligible[0]:null;
+   req.activeEditorCount=eligible.length;
+   req.mcpIdentity=identity;
+   return next();
+  }
+  // Preserve the short-lived bearer bridge for existing local integration clients.
+  if(session&&session.expires>now()){req.bridge=session;req.activeEditorCount=1;return next()}
+  return oauthChallenge(res);
+ }
+ if(!session||session.expires<=now())return res.status(401).json({error:'Invalid or expired session'});
+ const account=getGoogleAccount(req);
+ if(!bridgeAccessAllowed(session,account))return res.status(403).json({error:'Bridge session does not belong to this signed-in user'});
+ req.bridge=session;next();
+}
 const sessionLimiter=rateLimit({windowMs:15*60*1000,limit:8,standardHeaders:'draft-7',legacyHeaders:false,message:{error:'Too many bridge sessions; retry later'}});
 router.post('/session',sessionLimiter,requireGoogleAccount,(req,res)=>{if(sessions.size>=MAX_SESSIONS)return res.status(503).json({error:'Bridge capacity reached; retry later'});const token=id();sessions.set(hash(token),{ownerId:req.googleAccount.userId,loginId:req.googleAccount.loginId,expires:now()+TTL,jobs:new Map()});res.set('Cache-Control','no-store').json({token,expiresInSeconds:TTL/1000})});
 router.get('/jobs',find,(req,res)=>{res.set('Cache-Control','no-store').json({jobs:[...req.bridge.jobs.values()].filter(j=>j.status==='queued').map(({id,action,createdAt})=>({id,action,createdAt}))})});
@@ -64,10 +88,16 @@ router.post('/mcp',find,(req,res)=>{
   {name:'propose_editor_edits',description:'Submit 1–12 validated edit commands for the user to review in the connected browser. NOTHING executes until the user clicks Approve. Commands: '+EDITOR_ACTION_DESCRIPTION,inputSchema:{type:'object',properties:{summary:{type:'string'},actions:{type:'array',minItems:1,maxItems:12,items:{type:'object',properties:{type:{type:'string'}},required:['type']}}},required:['summary','actions'],additionalProperties:false}},
   {name:'get_editor_edit_status',description:'Read whether an AI edit proposal is awaiting approval, applying step-by-step, completed, rejected, or stale.',inputSchema:{type:'object',properties:{edit_id:{type:'string'}},required:['edit_id'],additionalProperties:false}}
 
- ]});
+ ].map(tool=>({...tool,securitySchemes:[{type:'oauth2',scopes:tool.name==='propose_editor_edits'||tool.name==='queue_transcription'?['editor.read','editor.write']:['editor.read']}]}))});
  if(body.method!=='tools/call')return fault(-32601,'Method not found');
+ if(!req.bridge)return reply({content:[{type:'text',text:JSON.stringify({error:req.activeEditorCount>1?
+  'Multiple AutoCaption Studio windows are connected for your Google account. Disconnect all but one to choose the correct project.':
+  'No active AutoCaption Studio window was found for your Google account. Open the editor, sign in with the same Google account and click Connect AI editing bridge.'})}],isError:true});
  const name=body.params?.name,args=body.params?.arguments||{};
  const output=(data,isError=false)=>reply({content:[{type:'text',text:JSON.stringify(data)}],isError});
+ const wantsWrite=name==='queue_transcription'||name==='propose_editor_edits';
+ if(wantsWrite&&req.mcpIdentity&&!req.mcpIdentity.scopes.includes('editor.write'))
+  return output({error:'editor.write scope is required for this action. Reconnect ChatGPT with editing permissions.'},true);
  if(name==='queue_transcription'){
   if(req.bridge.jobs.size>=10)return output({error:'Session job limit reached'},true);
   const job={id:id(),action:'transcribe',status:'queued',createdAt:now(),result:null};
