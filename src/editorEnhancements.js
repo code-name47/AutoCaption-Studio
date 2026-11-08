@@ -41,7 +41,7 @@ export function rippleDelete(clips,id){
  if(clips.some(c=>c.id!==id&&c.kind!=='motion'&&c.start<until-.02&&clipEnd(c)>from+.02&&
     c.trackId===target.trackId))
   throw Error('Overlapping clips on this track: remove the overlap before ripple deleting.');
- return clips.filter(c=>c.id!==id).map(c=>c.start>=until-.015?{...c,start:roundTime(Math.max(0,c.start-amount))}:c);
+ return clips.filter(c=>c.id!==id&&c.linkedSourceId!==id).map(c=>c.start>=until-.015?{...c,start:roundTime(Math.max(0,c.start-amount))}:c);
 }
 
 export function applyAudioPreset(clip,name){
