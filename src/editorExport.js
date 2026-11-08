@@ -1,5 +1,5 @@
 import {activeClips,clipEnd,transitionProgress,timelineDuration,trackFor} from './editorCore.js';
-import {resolvedClip,visualClipOpacity,audioClipGain} from './editorMotion.js';
+import {resolvedClip,visualClipOpacity,audioClipGain,risingTextPosition} from './editorMotion.js';
 
 const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
 function supportedMime(){
@@ -50,7 +50,7 @@ function paintClip(ctx,clip,node,time,width,height,clips){
  ctx.scale(clip.scale||1,clip.scale||1);
  ctx.translate(-width/2,-height/2);
  ctx.filter='brightness('+(clip.brightness??1)+') contrast('+(clip.contrast??1)+') saturate('+(clip.saturation??1)+')';
- if(clip.kind==='text')paintText(ctx,clip,width,height);
+ if(clip.kind==='text')paintText(ctx,clip.transitionIn==='rise'?{...clip,positionY:risingTextPosition(clip,time)}:clip,width,height);
  else if(node&&(clip.kind==='image'||node.readyState>=2))try{fitDraw(ctx,node,width,height)}catch{}
  ctx.restore();
 }
