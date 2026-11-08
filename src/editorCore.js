@@ -26,7 +26,8 @@ export function newClip(asset,trackId,start=0,id='clip-'+Math.random().toString(
   fontColor:'#ffffff',fontFamily:'Arial',fontWeight:700,positionY:50,
   audioChannel:'stereo',pan:0,eqLow:0,eqMid:0,eqHigh:0,
   chromaKey:false,chromaColor:'#00ff00',chromaTolerance:.18,chromaSoftness:.12,
-  textOutlineColor:'#000000',textOutlineWidth:0,textShadow:.9,hueRotate:0,blur:0};
+  textOutlineColor:'#000000',textOutlineWidth:0,textShadow:.9,hueRotate:0,blur:0,
+  cropLeft:0,cropRight:0,cropTop:0,cropBottom:0};
 }
 export const roundTime=n=>Math.max(0,Math.round(n*100)/100);
 export function snapTime(t,clips,excludeId,threshold=.16){
