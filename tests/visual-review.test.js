@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {publishEditorSnapshot} from '../server/editorBridge.js';
 import {storeVisualReview,readVisualReview,clearVisualReview,visualReviewMcpContent} from '../server/editorVisualReview.js';
-import {reviewSampleTimes,reviewTimelineNotes} from '../src/editorVisualReview.js';
+import {reviewSampleTimes,reviewTimelineNotes,reviewTranscriptAlignment} from '../src/editorVisualReview.js';
 import {newClip,TRACKS} from '../src/editorCore.js';
 
 const makeProject=()=>{
@@ -74,4 +74,19 @@ test('preview sampler selects diverse sorted timestamps and reports 0.4s cut ove
  assert.ok(notes.some(x=>x.includes('Video clips overlap by 0.4s')));
  assert.ok(notes.some(x=>x.includes('Caption gap of 1s')));
  assert.ok(notes.some(x=>x.includes('Last caption ends')));
+});
+
+test('caption audit uses source-relative transcript segments and flags unrelated speech',()=>{
+ const project=makeProject();
+ project.assets[0].transcript=[{start:0,end:3,text:'First words from this game'}];
+ project.assets[1].transcript=[{start:0,end:3,text:'Second message about this video'}];
+ const aligned=reviewTranscriptAlignment(project.clips,project.assets);
+ assert.equal(aligned.checked,2);
+ assert.equal(aligned.flags.length,0);
+ project.clips[0].text='Unrelated video text'; // video has no caption text; no audit effect
+ project.clips[2].text='The crazy monster attacked everyone';
+ const report=reviewTranscriptAlignment(project.clips,project.assets);
+ assert.equal(report.checked,2);
+ assert.ok(report.flags.some(x=>x.includes('Possible transcript/caption mismatch near 0s')));
+ assert.ok(reviewTimelineNotes(project.clips,project.assets).some(x=>x.includes('Compared 2 captions')));
 });
