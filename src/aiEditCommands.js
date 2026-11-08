@@ -3,7 +3,7 @@
 import {TRACKS,accepts,newClip,clipEnd,clipLength,splitClip,addTransition,roundTime} from './editorCore.js';
 
 const ASPECTS=['16:9','9:16','1:1'];
-const TRANSITIONS=['none','crossfade','fade','wipe','slide'];
+const TRANSITIONS=['none','crossfade','fade','wipe','slide','rise'];
 const PROPERTY_RANGES={
  volume:[0,1],opacity:[0,1],scale:[.05,10],offsetX:[-300,300],offsetY:[-100,100],
  rotation:[-180,180],brightness:[.2,2],contrast:[.2,2],saturation:[0,3],
@@ -120,6 +120,7 @@ export function applyEditorAction(project,action){
   failExtra(a,['type','clip_id','transition','duration']);
   const c=clipBy(p,a.clip_id);
   assert(c.kind!=='motion'&&TRANSITIONS.includes(a.transition),'Invalid transition');
+  if(a.transition==='rise')assert(c.kind==='text','Rise from below applies only to text and captions');
   const duration=a.duration??.7;
   assert(finite(duration,.1,2),'Transition duration must be 0.1–2 seconds');
   updated=copy(p,{clips:addTransition(p.clips,c.id,a.transition,duration)});
@@ -164,6 +165,6 @@ export const EDITOR_ACTION_DESCRIPTION=[
  'add_text: {type,text,start,duration,track_id?:"T1"|"C1"}',
  'add_media: {type,asset_id,start,track_id}',
  'remove_clip: {type,clip_id}',
- 'set_transition: {type,clip_id,transition:"none"|"crossfade"|"fade"|"wipe"|"slide",duration?}',
+ 'set_transition: {type,clip_id,transition:"none"|"crossfade"|"fade"|"wipe"|"slide"|"rise",duration?}',
  'set_clip_property: {type,clip_id,property,value}'
 ].join('; ');
