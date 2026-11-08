@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import {Router} from 'express';
 import rateLimit from 'express-rate-limit';
+import {revokeBridgeSessionsForLogin} from './bridge.js';
 
 const router=Router();
 const pending=new Map();
@@ -43,7 +44,7 @@ router.get('/callback',async(req,res)=>{
   const info=await infoResponse.json();
   if(!info.sub)return res.status(400).send('Google account identity unavailable.');
   const session=random();
-  accounts.set(digest(session),{userId:info.sub,email:info.email||'',accessToken:tokens.access_token,expires:Date.now()+Math.min(Number(tokens.expires_in||3600)*1000,3600000)});
+  accounts.set(digest(session),{loginId:digest(session),userId:info.sub,email:info.email||'',accessToken:tokens.access_token,expires:Date.now()+Math.min(Number(tokens.expires_in||3600)*1000,3600000)});
   res.cookie(cookieName,session,{httpOnly:true,secure,sameSite:'lax',path:'/',maxAge:3600000});
   return res.redirect('/?google=connected');
  }catch{return res.status(502).send('Google sign-in could not be completed. Please try again.')}
@@ -75,6 +76,6 @@ router.get('/file/:id',sameOrigin,async(req,res)=>{
   return res.end(Buffer.concat(chunks,total));
  }catch{return res.status(502).json({error:'Google Drive transfer failed'})}
 });
-router.post('/logout',sameOrigin,(req,res)=>{const token=cookies(req)[cookieName];if(token)accounts.delete(digest(token));res.clearCookie(cookieName,{httpOnly:true,secure,sameSite:'lax',path:'/'});res.json({ok:true})});
+router.post('/logout',sameOrigin,(req,res)=>{const token=cookies(req)[cookieName];if(token){revokeBridgeSessionsForLogin(digest(token));accounts.delete(digest(token));}res.clearCookie(cookieName,{httpOnly:true,secure,sameSite:'lax',path:'/'});res.json({ok:true})});
 setInterval(()=>{for(const [k,v] of pending)if(v.expires<Date.now())pending.delete(k);for(const [k,v] of accounts)if(v.expires<Date.now())accounts.delete(k)},60000).unref();
 export default router;
