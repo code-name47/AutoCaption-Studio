@@ -174,7 +174,7 @@ export function applyEditorAction(project,action){
   const property=a.property;assert(typeof property==='string','Invalid property');
   const range=Object.hasOwn(PROPERTY_RANGES,property)?PROPERTY_RANGES[property]:null;
   if(range)assert(finite(a.value,...range),'Invalid '+property+' value');
-  else if(property==='muted'||property==='chromaKey')assert(typeof a.value==='boolean','Expected boolean');
+  else if(property==='muted'||property==='chromaKey'||property==='locked')assert(typeof a.value==='boolean','Expected boolean');
   else if(property==='audioChannel')assert(['stereo','left','right'].includes(a.value),'Invalid audio channel');
   else if(['chromaColor','textOutlineColor'].includes(property))assert(typeof a.value==='string'&&COLORS.test(a.value),'Invalid color');
   else if(property==='fontColor')assert(c.kind==='text'&&typeof a.value==='string'&&COLORS.test(a.value),'Invalid font color');
