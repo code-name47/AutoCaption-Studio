@@ -36,9 +36,13 @@ test('ChatGPT-style OAuth pairing controls only the matching Google-owned browse
   scope:'editor.read editor.write',resource:resource.resource,state});
  await page.goto(HOST+'/oauth/authorize?'+query);
  await expect(page.getByRole('heading',{name:'Connect ChatGPT to AutoCaption Studio'})).toBeVisible();
+ const approvalResponse=page.waitForResponse(r=>r.url()===HOST+'/oauth/authorize'&&r.request().method()==='POST');
  await page.getByRole('button',{name:'Authorize ChatGPT'}).click();
- await expect.poll(()=>callbackUrl).toContain('connector_platform_oauth_redirect');
- const cb=new URL(callbackUrl);
+ const approval=await approvalResponse;
+ expect(approval.status()).toBe(302);
+ const redirectLocation=approval.headers()['location']||callbackUrl;
+ expect(redirectLocation).toContain('connector_platform_oauth_redirect');
+ const cb=new URL(redirectLocation);
  expect(cb.searchParams.get('state')).toBe(state);
  expect(cb.searchParams.get('iss')).toBe(HOST);
  const code=cb.searchParams.get('code');
