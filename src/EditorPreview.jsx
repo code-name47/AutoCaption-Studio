@@ -96,7 +96,7 @@ export default function EditorPreview({
  const selected=visible.find(c=>c.id===selectedId&&c.kind!=='audio'&&!c.trackId.startsWith('A'));
  const ratio=aspect==='9:16'?9/16:aspect==='1:1'?1:16/9;
  const fitWidth=Math.min(available.w*.92,available.h*.84*ratio);
- const frameWidth=Math.max(60,fitWidth*clamp(viewZoom/100,.3,.95));
+ const frameWidth=Math.max(60,fitWidth*clamp(viewZoom/100,.3,1.6));
  const frameStyle={width:frameWidth+'px',height:(frameWidth/ratio)+'px',aspectRatio:String(ratio),maxHeight:'none',maxWidth:'none'};
  const guide=selected&&selectionGeometry(selected,size);
  const offscreen=guide&&(guide.left<0||guide.left>100||guide.top<0||guide.top>100);
