@@ -83,7 +83,7 @@ const TABS=[
  {id:'export',label:'Export',icon:'⇧'},
  {id:'ai',label:'Connect',icon:'⌘'}
 ];
-const TRANSITIONS=[{id:'none',label:'Hard cut'},{id:'crossfade',label:'Cross dissolve'},{id:'fade',label:'Fade in'},{id:'wipe',label:'Wipe reveal'},{id:'slide',label:'Slide right'}];
+const TRANSITIONS=[{id:'none',label:'Hard cut'},{id:'crossfade',label:'Cross dissolve'},{id:'fade',label:'Fade in'},{id:'wipe',label:'Wipe reveal'},{id:'slide',label:'Slide right'},{id:'rise',label:'Rise from below'}];
 export default function EditorWorkspace(){
  const [name,setName]=useState('Untitled project'),[settings,setSettings]=useState(blankSettings),[tracks,setTracks]=useState(TRACKS),
  [assets,setAssets]=useState([]),[clips,setClips]=useState([]),[selectedId,setSelectedId]=useState(''),[selectedAssetId,setSelectedAssetId]=useState(''),
