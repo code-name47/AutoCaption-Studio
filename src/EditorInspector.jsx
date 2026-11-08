@@ -69,6 +69,13 @@ export default function EditorInspector({clip,asset,settings,onSettings,onPatch,
    <Range label="Edge softness" value={clip.chromaSoftness??.12} min="0" max=".5" step=".01" onChange={v=>patch('chromaSoftness',v)}/>
    <p className="ve-note">Place a background image or video on a lower video track. Preview and WebM export use the same color-key algorithm.</p>
   </details>}
+  {(clip.kind==='video'||clip.kind==='image')&&!clip.trackId.startsWith('A')&&<details><summary>Crop and mask</summary>
+   <Range label="Crop left %" min="0" max="49" step="1" value={clip.cropLeft??0} onChange={v=>patch('cropLeft',v)}/>
+   <Range label="Crop right %" min="0" max="49" step="1" value={clip.cropRight??0} onChange={v=>patch('cropRight',v)}/>
+   <Range label="Crop top %" min="0" max="49" step="1" value={clip.cropTop??0} onChange={v=>patch('cropTop',v)}/>
+   <Range label="Crop bottom %" min="0" max="49" step="1" value={clip.cropBottom??0} onChange={v=>patch('cropBottom',v)}/>
+   <button onClick={()=>onPatch(clip.id,{cropLeft:0,cropRight:0,cropTop:0,cropBottom:0})}>Reset crop</button>
+  </details>}
   {clip.kind!=='audio'&&<details open><summary>Transform & color</summary>
    <Range label="Opacity" value={clip.opacity} min="0" max="1" step=".02" onChange={v=>patch('opacity',v)}/>
    <Range label="Zoom / scale" value={clip.scale} min=".05" max="10" step=".01" onChange={v=>patch('scale',v)}/>
