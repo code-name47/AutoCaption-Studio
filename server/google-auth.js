@@ -16,6 +16,7 @@ const configured=()=>Boolean(process.env.GOOGLE_CLIENT_ID&&process.env.GOOGLE_CL
 const cookieOptions={httpOnly:true,secure,sameSite:'lax',path:'/auth/google'};
 function cookies(req){return Object.fromEntries((req.get('cookie')||'').split(';').map(s=>s.trim().split(/=(.*)/s).slice(0,2)).filter(a=>a[0]));}
 function current(req){const token=cookies(req)[cookieName];const a=token&&accounts.get(digest(token));return a&&a.expires>Date.now()?a:null;}
+export function requireGoogleAccount(req,res,next){const account=current(req);if(!account)return res.status(401).json({error:'Sign in with Google to connect an AI client'});req.googleAccount=account;next();}
 router.get('/status',(req,res)=>res.set('Cache-Control','no-store').json({configured:configured(),connected:Boolean(current(req))}));
 router.get('/start',rateLimit({windowMs:15*60*1000,limit:10,standardHeaders:'draft-7',legacyHeaders:false}),(req,res)=>{
  if(!configured())return res.status(503).send('Google OAuth is not configured on this server.');
