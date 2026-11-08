@@ -26,21 +26,20 @@ test('ChatGPT-style OAuth pairing controls only the matching Google-owned browse
  expect(client.client_id).toMatch(/^acs_/);
  const verifier=crypto.randomBytes(48).toString('base64url');
  const state=crypto.randomBytes(20).toString('base64url');
- let callbackUrl='';
- await page.route('https://chatgpt.com/connector_platform_oauth_redirect**',route=>{
-  callbackUrl=route.request().url();
-  return route.fulfill({status:200,contentType:'text/plain',body:'ChatGPT OAuth callback was received'});
- });
+
  const query=new URLSearchParams({response_type:'code',client_id:client.client_id,
   redirect_uri:REDIRECT,code_challenge_method:'S256',code_challenge:encode(verifier),
   scope:'editor.read editor.write',resource:resource.resource,state});
  await page.goto(HOST+'/oauth/authorize?'+query);
  await expect(page.getByRole('heading',{name:'Connect ChatGPT to AutoCaption Studio'})).toBeVisible();
- const approvalResponse=page.waitForResponse(r=>r.url()===HOST+'/oauth/authorize'&&r.request().method()==='POST');
- await page.getByRole('button',{name:'Authorize ChatGPT'}).click();
- const approval=await approvalResponse;
+ // Submit the displayed consent as an authenticated request without navigating
+ // the headless test browser to chatgpt.com (which is deliberately unreachable in CI).
+ const requestId=await page.locator('input[name="request_id"]').inputValue();
+ const approval=await api.post(HOST+'/oauth/authorize',{
+  form:{request_id:requestId,decision:'approve'},maxRedirects:0,failOnStatusCode:false
+ });
  expect(approval.status()).toBe(302);
- const redirectLocation=approval.headers()['location']||callbackUrl;
+ const redirectLocation=approval.headers()['location'];
  expect(redirectLocation).toContain('connector_platform_oauth_redirect');
  const cb=new URL(redirectLocation);
  expect(cb.searchParams.get('state')).toBe(state);
