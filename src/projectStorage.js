@@ -26,9 +26,9 @@ export async function loadBrowserProject(){
  try{
   const p=await request(db.transaction('projects','readonly').objectStore('projects').get('current'));
   if(!p)return null;
-  const mediaTx=db.transaction('media','readonly');const store=mediaTx.objectStore('media');
+  const mediaTx=db.transaction('media','readonly');const settled=finished(mediaTx);const store=mediaTx.objectStore('media');
   const files=await Promise.all(p.assets.map(a=>request(store.get(a.id))));
-  await finished(mediaTx);
+  await settled;
   return {...p,assets:p.assets.map((a,i)=>{
    const blob=files[i]||null;
    return {...a,file:blob,url:blob?URL.createObjectURL(blob):'',missing:!blob};
