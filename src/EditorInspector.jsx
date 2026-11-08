@@ -7,7 +7,7 @@ function NumberInput({label,value,min=0,max=9999,step=.1,onChange}){
 function Range({label,value,min=0,max=2,step=.05,onChange}){
  return <label className="ve-range"><span>{label}<input aria-label={label+' exact value'} type="number" min={min} max={max} step={step} value={Number.isFinite(Number(value))?value:0} onChange={e=>{const n=Number(e.target.value);if(e.target.value!==''&&Number.isFinite(n))onChange(Math.max(min,Math.min(max,n)))}}/></span><input type="range" min={min} max={max} step={step} value={value} onChange={e=>onChange(Number(e.target.value))}/></label>;
 }
-export default function EditorInspector({clip,asset,settings,onSettings,onPatch,onTransition,onSplit,onDelete,time}){
+export default function EditorInspector({clip,asset,settings,onSettings,onPatch,onTransition,onSplit,onDelete,onDetachAudio,onSplitStereo,onRippleDelete,onAudioPreset,time}){
  if(!clip)return <aside className="ve-inspector"><div className="ve-pane-heading"><b>Inspector</b><small>Project</small></div>
    <div className="ve-inspector-body"><h4>Project settings</h4><label className="ve-field"><span>Canvas aspect</span><select value={settings.aspect} onChange={e=>onSettings({...settings,aspect:e.target.value})}><option>16:9</option><option>9:16</option><option>1:1</option></select></label>
     <label className="ve-field"><span>Frame rate</span><select value={settings.fps} onChange={e=>onSettings({...settings,fps:Number(e.target.value)})}><option>24</option><option>25</option><option>30</option><option>60</option></select></label>
@@ -18,6 +18,9 @@ export default function EditorInspector({clip,asset,settings,onSettings,onPatch,
  return <aside className="ve-inspector"><div className="ve-pane-heading"><b>Inspector</b><small>{clip.trackId}</small></div><div className="ve-inspector-body">
   <h4 className="ve-inspector-title">{clip.kind==='text'?clip.text:asset?.name||'Selected clip'}</h4>
   <div className="ve-inspector-tools"><button onClick={()=>onSplit(clip.id)}>✂ Split at playhead</button><button onClick={()=>onDelete(clip.id)}>Delete</button></div>
+  <div className="ve-inspector-tools"><button title="Remove selected clip and close following gap" onClick={()=>onRippleDelete(clip.id)}>Ripple delete</button>
+  {clip.kind==='video'&&!clip.trackId.startsWith('A')&&<button onClick={()=>onDetachAudio(clip.id)}>Detach audio</button>}
+  {clip.kind==='audio'&&<button onClick={()=>onSplitStereo(clip.id)}>Split L/R</button>}</div>
   <details open><summary>Timing & trim</summary>
    <NumberInput label="Position (s)" value={clip.start} step=".05" onChange={v=>patch('start',v)}/>
    <NumberInput label="In point (s)" value={clip.inPoint} step=".05" max={Math.max(.1,clip.outPoint-.1)} onChange={v=>patch('inPoint',v)}/>
@@ -25,7 +28,19 @@ export default function EditorInspector({clip,asset,settings,onSettings,onPatch,
    <NumberInput label="Speed" value={clip.speed} min=".25" max="4" step=".05" onChange={v=>patch('speed',v)}/>
    <p className="ve-note">Timeline duration: {fmt(duration)}s · End: {fmt(clipEnd(clip))}s</p>
   </details>
-  {(clip.kind==='video'||clip.kind==='audio')&&<details open><summary>Audio</summary><label className="ve-field"><span>Mute clip</span><input type="checkbox" checked={clip.muted} onChange={e=>patch('muted',e.target.checked)}/></label><Range label="Volume" value={clip.volume} min="0" max="1" step=".01" onChange={v=>patch('volume',v)}/></details>}
+  {(clip.kind==='video'||clip.kind==='audio')&&<details open><summary>Audio mixer and channels</summary>
+   <label className="ve-field"><span>Mute clip</span><input type="checkbox" checked={clip.muted} onChange={e=>patch('muted',e.target.checked)}/></label>
+   <Range label="Volume" value={clip.volume} min="0" max="1" step=".01" onChange={v=>patch('volume',v)}/>
+   <Range label="Stereo pan" value={clip.pan??0} min="-1" max="1" step=".05" onChange={v=>patch('pan',v)}/>
+   <label className="ve-field"><span>Audio channel</span><select value={clip.audioChannel||'stereo'} onChange={e=>patch('audioChannel',e.target.value)}>
+    <option value="stereo">Original stereo</option><option value="left">Left only</option><option value="right">Right only</option>
+   </select></label>
+   <Range label="Low EQ (dB)" value={clip.eqLow??0} min="-18" max="18" step=".5" onChange={v=>patch('eqLow',v)}/>
+   <Range label="Mid EQ (dB)" value={clip.eqMid??0} min="-18" max="18" step=".5" onChange={v=>patch('eqMid',v)}/>
+   <Range label="High EQ (dB)" value={clip.eqHigh??0} min="-18" max="18" step=".5" onChange={v=>patch('eqHigh',v)}/>
+   <div className="ve-inspector-tools">{['dialogue','music','flat'].map(p=><button key={p} onClick={()=>onAudioPreset(clip.id,p)} title={'Apply '+p+' audio mix'}>{p}</button>)}</div>
+   <p className="ve-note">Stereo channel isolation, pan and 3-band EQ also apply during export. Audio L/R separation needs a source with two decodable channels.</p>
+  </details>}
   {clip.kind!=='audio'&&<details open><summary>Transitions & fades</summary>
    <label className="ve-field"><span>Entrance</span><select value={clip.transitionIn} onChange={e=>onTransition(clip.id,e.target.value,clip.transitionDuration)}>
     <option value="none">Cut (none)</option><option value="crossfade">Cross dissolve</option><option value="fade">Fade in</option><option value="wipe">Wipe right</option><option value="slide">Slide in</option>{clip.kind==='text'&&<option value="rise">Rise from below</option>}
@@ -36,9 +51,19 @@ export default function EditorInspector({clip,asset,settings,onSettings,onPatch,
   {clip.kind==='text'&&<details open><summary>Text & caption</summary>
    <label className="ve-stacked-field"><span>Text</span><textarea rows="4" value={clip.text} onChange={e=>patch('text',e.target.value)}/></label>
    <label className="ve-field"><span>Text color</span><input type="color" value={clip.fontColor} onChange={e=>patch('fontColor',e.target.value)}/></label>
+   <label className="ve-field"><span>Outline color</span><input type="color" value={clip.textOutlineColor||'#000000'} onChange={e=>patch('textOutlineColor',e.target.value)}/></label>
+   <NumberInput label="Outline width" value={clip.textOutlineWidth??0} min="0" max="12" step=".5" onChange={v=>patch('textOutlineWidth',v)}/>
+   <Range label="Shadow strength" value={clip.textShadow??.9} min="0" max="1" step=".05" onChange={v=>patch('textShadow',v)}/>
    <NumberInput label="Font size" value={clip.fontSize} min="1" max="500" step=".5" onChange={v=>patch('fontSize',v)}/>
    <NumberInput label="Vertical position %" value={clip.positionY} min="0" max="100" step="2" onChange={v=>patch('positionY',v)}/>
    <label className="ve-field"><span>Font</span><select value={clip.fontFamily} onChange={e=>patch('fontFamily',e.target.value)}><option>Arial</option><option>Verdana</option><option>Georgia</option><option>Impact</option><option>Tahoma</option></select></label>
+  </details>}
+  {(clip.kind==='video'||clip.kind==='image')&&!clip.trackId.startsWith('A')&&<details open><summary>Green screen and compositing</summary>
+   <label className="ve-field"><span>Enable chroma key</span><input type="checkbox" checked={Boolean(clip.chromaKey)} onChange={e=>patch('chromaKey',e.target.checked)}/></label>
+   <label className="ve-field"><span>Remove color</span><input type="color" value={clip.chromaColor||'#00ff00'} onChange={e=>patch('chromaColor',e.target.value)}/></label>
+   <Range label="Key tolerance" value={clip.chromaTolerance??.18} min=".01" max=".9" step=".01" onChange={v=>patch('chromaTolerance',v)}/>
+   <Range label="Edge softness" value={clip.chromaSoftness??.12} min="0" max=".5" step=".01" onChange={v=>patch('chromaSoftness',v)}/>
+   <p className="ve-note">Place a background image or video on a lower video track. Preview and WebM export use the same color-key algorithm.</p>
   </details>}
   {clip.kind!=='audio'&&<details open><summary>Transform & color</summary>
    <Range label="Opacity" value={clip.opacity} min="0" max="1" step=".02" onChange={v=>patch('opacity',v)}/>
@@ -49,6 +74,13 @@ export default function EditorInspector({clip,asset,settings,onSettings,onPatch,
    <Range label="Brightness" value={clip.brightness} min=".2" max="2" step=".05" onChange={v=>patch('brightness',v)}/>
    <Range label="Contrast" value={clip.contrast} min=".2" max="2" step=".05" onChange={v=>patch('contrast',v)}/>
    <Range label="Saturation" value={clip.saturation} min="0" max="3" step=".05" onChange={v=>patch('saturation',v)}/>
+   <Range label="Warmth / hue" value={clip.hueRotate??0} min="-180" max="180" step="1" onChange={v=>patch('hueRotate',v)}/>
+   <Range label="Blur" value={clip.blur??0} min="0" max="20" step=".5" onChange={v=>patch('blur',v)}/>
+   <div className="ve-inspector-tools">
+    <button onClick={()=>onPatch(clip.id,{brightness:1,contrast:1,saturation:0,hueRotate:0,blur:0})}>B&W</button>
+    <button onClick={()=>onPatch(clip.id,{brightness:1.06,contrast:1.14,saturation:1.3,hueRotate:0,blur:0})}>Vivid</button>
+    <button onClick={()=>onPatch(clip.id,{brightness:1,contrast:1,saturation:1,hueRotate:0,blur:0})}>Reset</button>
+   </div>
   </details>}
  </div></aside>;
 }
