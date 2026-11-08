@@ -75,5 +75,6 @@ test('MCP queues two specific imported files and the browser returns isolated ti
  const jobs=await rpc('list_transcriptions',{},8);
  expect(jobs.jobs.filter(j=>j.status==='complete').length).toBeGreaterThanOrEqual(2);
  expect(errors).toEqual([]);
- await request.delete('/api/bridge/session',{headers:{Authorization:'Bearer '+token}});
+ const disconnected=await page.context().request.delete('/api/bridge/session',{headers:{Authorization:'Bearer '+token}});
+ expect(disconnected.ok()).toBe(true);
 });
