@@ -8,8 +8,10 @@ AutoCaption Studio now exposes a short-lived remote MCP endpoint that lets an **
 2. Open the **Connect** panel and click **Connect AI editing bridge**.
 3. Wait for **Browser synced and ready**. The bridge uploads only the project's **media names, clip metadata, text, track IDs and canvas settings**, not actual video files.
 4. For a local end-to-end demonstration, click **Test live AI editing (approval required)**. A floating review panel appears. Click **Approve & watch** to see the canvas switch orientation and a title appear in the preview and timeline. Use **Revert last AI edits** to reverse it.
-5. To connect a real AI client, copy the MCP endpoint and separately supply the short-lived session token using that client's **bearer authentication configuration** (never in a message or a URL). The remote endpoint is `https://YOUR-HOST/api/bridge/mcp`. ChatGPT requires a supported custom MCP plugin connection with appropriate workspace permissions. Merely opening this browser page does **not** connect an existing ChatGPT conversation.
-6. Keep the browser and connection open. Each session expires after 30 minutes. On expiration, connect a new session.
+5. In ChatGPT on the web, open **Plugins → + → Add custom MCP server**, name it **AutoCaption Studio**, and enter `https://YOUR-HOST/api/bridge/mcp`. Select **OAuth authentication**. ChatGPT uses OAuth discovery, dynamic client registration, PKCE, and an explicit consent screen. Approve the app while signed into the **same Google account** that owns your editor session.
+6. Install the newly created personal or workspace plugin. In a chat message, select or @mention **AutoCaption Studio**, then say "Inspect my current timeline." Once the project is returned, you can give editing instructions. You will review them in your editor before any changes occur.
+7. Neither a GitHub connection nor an open editor tab automatically installs a ChatGPT plugin. Plugin creation and Google authorization require the user to approve the account connection in ChatGPT.
+8. Keep the browser open. The browser bridge currently expires after 30 minutes; reconnect the editor if it goes offline.
 
 ## MCP tools
 
@@ -42,12 +44,13 @@ Supported operations: `set_canvas`, `move_clip`, `trim_clip`, `split_clip`, `set
 
 ## Security boundary and limitations
 
-- Session tokens are random, bearer-based, short-lived, stored only as hashes on the server, and **never added to the MCP URL**. Treat the token as a secret: anyone possessing it can inspect this session's project metadata and propose edits (still subject to browser approval).
-- The session-creation and browser polling endpoints require the **same Google user and same Google login session**, preventing one person's browser from reading another person's queued edits. The remote MCP endpoint requires the matching bearer token.
-- The server keeps project metadata and queued proposals **only in memory**. Restarting the server loses those sessions. No media bytes, OAuth tokens, or per-user project buffers are stored by the edit relay.
+- ChatGPT links through an OAuth 2.1 authorization-code flow with PKCE S256. The app brokers the signed-in Google identity into restricted, audience-bound access credentials. Tokens are random and stored only as hashes on the server; do not paste them into chat or URLs.
+- OAuth client registration is restricted to ChatGPT's HTTPS callback URI and cannot redirect to arbitrary hosts. The user sees a separate consent screen. The existing short-lived bearer mode remains for test clients but is not the preferred ChatGPT setup.
+- Browser snapshots, approval and progress require the **same Google user and login session** that created the editor bridge. ChatGPT OAuth tokens can inspect a live editor only for **the same Google account**, and refuse editing if multiple editor sessions are open. The application never automatically selects a different person's project.
+- The MVP keeps sanitized project metadata, edit proposals, OAuth codes and hashed access/refresh credentials **in memory**, not a persistent database. A server restart requires signing in again and reconnecting the editor. Media bytes are not uploaded through the editing bridge.
 - The browser never applies an edit until it has compared its project with the exact base revision used by the AI. A human change invalidates a stale proposal.
 - Commands use fixed field allowlists and numeric bounds: they cannot execute JavaScript, fetch arbitrary URLs, access Drive, or run shell commands.
-- This is an MVP, **not a guarantee of security**. Before offering it publicly to many users, use durable authenticated session storage, formal OAuth for MCP clients, CSRF/audit review, quotas and privacy/security testing.
+- This is an MVP, **not a guarantee of security**. Before launching publicly for many users, audit OAuth and session isolation, add persistent secured sessions, stricter event auditing and abuse quotas, and perform security penetration testing.
 - Not implemented: autonomous browsing of Google Drive, automatic media import from pasted URLs, clip understanding via visual frames, semantic footage selection, rendering/export from MCP, or the final ChatGPT plugin registration.
 
 ## HTTP relay (browser only)
@@ -61,12 +64,13 @@ The signed-in browser uses:
 - `POST /api/bridge/editor/edits/:id/progress` — stream applied-step status
 - `POST /api/bridge/editor/demo` — generate the same approval-gated test proposal
 
-The MCP client sends JSON-RPC 2.0 to `POST /api/bridge/mcp` with an HTTPS `Authorization: Bearer <SESSION_TOKEN>` header. Do **not** expose token values in browser URLs or commit them into source code.
+ChatGPT performs OAuth discovery at `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`, registers a public client at `/oauth/register`, then uses authorization code + PKCE at `/oauth/authorize` and `/oauth/token`. Authenticated MCP requests use an OAuth access token, never a browser session secret. A custom ChatGPT plugin must be created and installed before chat commands can call this endpoint.
 
 ## Tests
 
 - `tests/ai-editor-actions.test.js`: deterministic, safe timeline operations and malicious input rejection
 - `tests/editor-bridge-security.test.js`: isolation, approval, staleness and metadata filtering
 - `tests/e2e/ai-live-edit.spec.js`: end-to-end browser review / progressive live edits / undo / reject, with a mocked relay
+- `tests/integration/chatgpt-oauth.spec.js`: complete OAuth + PKCE + DCR + browser approval and real editing verification
 
 The custom MCP plugin must be connected in ChatGPT (where permitted) after the feature branch has been deployed; it is not connected automatically through GitHub access.
