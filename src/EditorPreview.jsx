@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {activeClips,clipEnd,renderOpacity,transitionProgress,trackFor} from './editorCore.js';
 import {resolvedClip,visualClipOpacity,audioClipGain,clamp,captureMotion,risingTextPosition} from './editorMotion.js';
+import {attachAudioGraph,audioTrackEnabled} from './editorAudio.js';
 
 const between=(n,a,b)=>Math.min(b,Math.max(a,n));
 function layerStyle(clip,time,clips){
@@ -29,10 +30,11 @@ function selectionGeometry(c,size){
  };
 }
 export default function EditorPreview({
- assets,clips,time,playing,onSelect,selectedId,aspect='16:9',trackMuted={},
+ assets,clips,time,playing,onSelect,selectedId,aspect='16:9',trackMuted={},trackSolo={},
  onTransformStart,onTransform,onTransformEnd,viewZoom=70
 }){
  const nodes=useRef(new Map()),stage=useRef(null),pasteboard=useRef(null),gesture=useRef(null);
+ const audioCtx=useRef(null),routes=useRef(new Map());
  const [size,setSize]=useState({w:720,h:405}),[available,setAvailable]=useState({w:900,h:500});
  useEffect(()=>{
   if(!pasteboard.current)return;
@@ -50,19 +52,38 @@ export default function EditorPreview({
  const visible=useMemo(()=>activeClips(clips,time).map(c=>resolvedClip(c,clips,time)),[clips,time]);
  const visibleIds=visible.map(c=>c.id).join(',');
  useEffect(()=>{
+  for(const [id,route] of routes.current){
+   if(!nodes.current.has(id)){route.dispose();routes.current.delete(id)}
+  }
   for(const [id,element] of nodes.current){
    const original=clips.find(c=>c.id===id),clip=original&&resolvedClip(original,clips,time);
    const asset=assets.find(a=>a.id===clip?.assetId);
    const isActive=clip&&time>=clip.start&&time<clipEnd(clip)&&asset?.url;
-   if(!isActive){element.pause();continue}
+   const enable=Boolean(clip&&audioTrackEnabled(clip.trackId,trackMuted,trackSolo));
+   if(!isActive){element.pause();routes.current.get(id)?.setGain(0);continue}
    const target=between(clip.inPoint+(time-clip.start)*clip.speed,clip.inPoint,clip.outPoint);
    if(element.readyState>=1&&Math.abs(element.currentTime-target)>.3){try{element.currentTime=target}catch{}}
    element.playbackRate=between(clip.speed,.25,4);
-   element.volume=trackMuted[clip.trackId]?0:audioClipGain(clip,clips,time);
-   if(playing){if(element.paused)element.play().catch(()=>{})}else if(!element.paused)element.pause();
+   let route=routes.current.get(id);
+   if(!route&&typeof window!=='undefined'&&(window.AudioContext||window.webkitAudioContext)){
+    try{
+     if(!audioCtx.current)audioCtx.current=new (window.AudioContext||window.webkitAudioContext)();
+     route=attachAudioGraph(audioCtx.current,element,audioCtx.current.destination,clip);
+     routes.current.set(id,route);
+    }catch(error){console.warn('Preview audio routing unavailable:',error)}
+   }
+   const gain=enable?audioClipGain(clip,clips,time):0;
+   if(route){route.update(clip);route.setGain(gain);element.volume=1}
+   else element.volume=gain;
+   if(playing){if(element.paused)element.play().catch(()=>{})}
+   else if(!element.paused)element.pause();
   }
- },[time,playing,visibleIds,clips,assets,trackMuted]);
- useEffect(()=>()=>{for(const el of nodes.current.values())el.pause()},[]);
+  if(playing&&audioCtx.current?.state==='suspended')audioCtx.current.resume().catch(()=>{});
+ },[time,playing,visibleIds,clips,assets,trackMuted,trackSolo]);
+ useEffect(()=>()=>{for(const el of nodes.current.values())el.pause();
+  for(const route of routes.current.values())route.dispose();routes.current.clear();
+  audioCtx.current?.close().catch(()=>{});
+ },[]);
  function begin(e,clip,mode='move'){
   if(e.button!==0)return;
   e.preventDefault();e.stopPropagation();
