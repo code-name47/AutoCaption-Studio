@@ -40,3 +40,32 @@ test('green-screen edit creates keyed preview canvas for an imported image, with
   return empty<20&&colored>200;
  })).toBe(true);
 });
+
+test('timeline markers save/reopen and locked media cannot be deleted until unlocked',async({page})=>{
+ await page.goto('/');
+ const png=await page.evaluate(()=>{
+  const c=document.createElement('canvas');c.width=32;c.height=32;
+  c.getContext('2d').fillRect(0,0,32,32);
+  return c.toDataURL('image/png').split(',')[1];
+ });
+ await page.locator('input[accept="video/*,audio/*,image/*"]').setInputFiles({
+  name:'marker-and-lock.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')
+ });
+ await page.locator('.ve-media-item button').first().click();
+ await page.getByRole('button',{name:'Add marker at playhead'}).click();
+ await expect(page.locator('.ve-ruler-marker')).toHaveCount(1);
+ await page.getByLabel('Lock clip').check();
+ await expect(page.locator('.ve-clip-locked')).toHaveCount(1);
+ await page.locator('.ve-inspector-tools').getByRole('button',{name:'Delete',exact:true}).click();
+ await expect(page.locator('.ve-clip-locked')).toHaveCount(1);
+ await page.getByLabel('Lock clip').uncheck();
+ await page.getByRole('button',{name:'Save',exact:true}).click();
+ await expect(page.locator('.ve-top-state')).toContainText('Project saved');
+ await page.reload();
+ await page.locator('.ve-side-tabs button[title="Export"]').click();
+ await page.getByRole('button',{name:'Open saved browser project'}).click();
+ await expect(page.locator('.ve-ruler-marker')).toHaveCount(1);
+ await expect(page.locator('.ve-clip')).toHaveCount(1);
+ await page.locator('.ve-ruler-marker').first().click({button:'right'});
+ await expect(page.locator('.ve-ruler-marker')).toHaveCount(0);
+});
