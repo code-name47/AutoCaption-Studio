@@ -15,7 +15,7 @@ import {renderProjectToWebM} from './editorExport.js';
 import {makeMediaThumbnail} from './mediaThumbnails.js';
 import {captureVisualReview,reviewTimelineNotes} from './editorVisualReview.js';
 import {captureMotion,newMotionClip} from './editorMotion.js';
-import {detachAudioFromVideo,splitStereoAudio,rippleDelete,applyAudioPreset} from './editorEnhancements.js';
+import {detachAudioFromVideo,splitStereoAudio,rippleDelete,applyAudioPreset,syncLinkedAudio,splitLinkedVideoAudio,removeLinkedWithVideo} from './editorEnhancements.js';
 import './editorWorkspace.css';
 
 const uid=()=>globalThis.crypto?.randomUUID?.()||'id-'+Math.random().toString(36).slice(2);
@@ -151,8 +151,14 @@ export default function EditorWorkspace(){
   animation=requestAnimationFrame(frame);return()=>cancelAnimationFrame(animation);
  },[playing,length]);
  function togglePlay(){if(sourceViewer){setSourceViewer(false);setPlaying(true);return}if(!clips.length){note('Add a clip to a track to play the timeline.');return}if(timeRef.current>=length-.05){setTime(0);timeRef.current=0}setPlaying(v=>!v)}
- function removeClip(id){if(recording.current?.targetClipId===id)stopRecording();record();setClips(cs=>cs.filter(c=>c.id!==id));if(selectedId===id)setSelectedId('');setPlaying(false)}
- function updateClip(id,patch){if(recording.current?.targetClipId!==id)record();setClips(cs=>cs.map(c=>c.id===id?{...c,...patch}:c));if(recording.current?.targetClipId===id)captureKeyframe(id,patch)}
+ function removeClip(id){if(recording.current?.targetClipId===id)stopRecording();record();setClips(cs=>removeLinkedWithVideo(cs,id));if(selectedId===id)setSelectedId('');setPlaying(false)}
+ function updateClip(id,patch){if(recording.current?.targetClipId!==id)record();setClips(cs=>{
+   const source=cs.find(c=>c.id===id);
+   const preserve=source?.kind==='audio'&&source.linkedSourceId&&
+    ['start','inPoint','outPoint','speed'].some(k=>Object.hasOwn(patch,k));
+   const changed=cs.map(c=>c.id===id?{...c,...patch,...(preserve?{linkedSourceId:null}:{})}:c);
+   return source?.kind==='video'&&['start','inPoint','outPoint','speed'].some(k=>Object.hasOwn(patch,k))?syncLinkedAudio(changed,id):changed;
+  });if(recording.current?.targetClipId===id)captureKeyframe(id,patch)}
 
  // Recording is non-destructive: edits become timed keyframes in a reusable
  // purple motion clip; the original object's values are restored on Stop.
@@ -200,7 +206,10 @@ export default function EditorWorkspace(){
   const original=clipsRef.current.find(c=>c.id===id);if(!original)return;
   record();const duplicate={...original,id:uid(),start:clipEnd(original)+.1,
    ...(original.kind==='motion'?{keyframes:original.keyframes?.map(k=>({t:k.t,values:{...k.values}}))}: {})};
-  setClips(cs=>[...cs,duplicate]);setSelectedId(duplicate.id);note('Duplicated clip. Drag it wherever you want.');
+  setClips(cs=>{
+   const linked=original.kind==='video'?cs.filter(c=>c.kind==='audio'&&c.linkedSourceId===id):[];
+   return [...cs,duplicate,...linked.map(c=>({...c,id:uid(),linkedSourceId:duplicate.id,start:duplicate.start}))];
+  });setSelectedId(duplicate.id);note('Duplicated clip'+(original.kind==='video'?' and its linked audio':'')+'. Drag it wherever you want.');
  }
  function removeTrack(trackId){
   if(['T1','C1'].includes(trackId)){note('The dedicated Titles and Captions tracks cannot be removed.');return}
@@ -275,9 +284,26 @@ export default function EditorWorkspace(){
   if(!a||!accepts(a,trackId)){note('This media type cannot be placed on that track.');return}
   record();const c=newClip(a,trackId,at,uid());setClips(cs=>[...cs,c]);setSelectedId(c.id);setSourceViewer(false);note(a.name+' added to '+trackId);
  }
- function moveClip(id,trackId,at){const c=clips.find(x=>x.id===id);const asset=assets.find(a=>a.id===c?.assetId);if(!c||!accepts(asset||{kind:c.kind},trackId)){note('Incompatible track type');return}record();setClips(cs=>placeClip(cs,id,trackId,at,8/zoom));setSelectedId(id);setSourceViewer(false)}
- function split(id){const c=clips.find(x=>x.id===id);if(c?.kind==='motion'){note('To split an animation, duplicate it and trim the copies.');return}const parts=splitClip(c,timeRef.current,uid());if(!parts){note('Move the playhead inside the selected clip before splitting.');return}record();setClips(cs=>cs.flatMap(x=>x.id===id?parts:[x]));setSelectedId(parts[1].id);note('Clip split at '+timeLabel(timeRef.current))}
- function trim(id,edge,delta,original){const asset=assets.find(x=>x.id===original.assetId);setClips(cs=>cs.map(c=>c.id===id?trimClip(original,edge,delta,asset?.duration):c))}
+ function moveClip(id,trackId,at){const c=clips.find(x=>x.id===id);const asset=assets.find(a=>a.id===c?.assetId);
+  if(!c||!accepts(asset||{kind:c.kind},trackId)){note('Incompatible track type');return}
+  record();setClips(cs=>{
+   let result=placeClip(cs,id,trackId,at,8/zoom);
+   if(c.kind==='video')result=syncLinkedAudio(result,id);
+   if(c.kind==='audio'&&c.linkedSourceId){
+    result=result.map(x=>x.id===id?{...x,linkedSourceId:null}:x);
+   }
+   return result;
+  });setSelectedId(id);setSourceViewer(false)}
+ function split(id){const c=clips.find(x=>x.id===id);if(c?.kind==='motion'){note('To split an animation, duplicate it and trim the copies.');return}const parts=splitClip(c,timeRef.current,uid());if(!parts){note('Move the playhead inside the selected clip before splitting.');return}record();setClips(cs=>{
+   const split=cs.flatMap(x=>x.id===id?parts:[x]);
+   return c.kind==='video'?splitLinkedVideoAudio(split,id,parts,uid()):split;
+  });setSelectedId(parts[1].id);note('Clip split at '+timeLabel(timeRef.current))}
+ function trim(id,edge,delta,original){const asset=assets.find(x=>x.id===original.assetId);
+  setClips(cs=>{
+   const updated=cs.map(c=>c.id===id?trimClip(original,edge,delta,asset?.duration):c);
+   return original.kind==='video'?syncLinkedAudio(updated,id):updated;
+  });
+ }
  function transition(id,type,duration){if(clips.find(c=>c.id===id)?.kind==='motion'){note('Transitions apply to media, not motion clips.');return}record();setClips(cs=>addTransition(cs,id,type,duration));setSelectedId(id);note(type==='none'?'Transition removed':type+' transition applied')}
  function addTrack(kind){const prefix=kind==='audio'?'A':'V',count=tracks.filter(t=>t.id.startsWith(prefix)).length;if(count>=12){note('Maximum 12 '+kind+' tracks');return}const number=tracks.reduce((m,t)=>t.id.startsWith(prefix)?Math.max(m,Number(t.id.slice(1))):m,0)+1;const track={id:prefix+number,label:(kind==='audio'?'Audio ':'Video ')+number,kind,z:kind==='audio'?0:number*10};setTracks(old=>kind==='audio'?[...old,track]:[track,...old]);note('Added '+track.label)}
  function populateThumbnails(items){
