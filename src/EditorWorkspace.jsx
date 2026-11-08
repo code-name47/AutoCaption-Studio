@@ -13,6 +13,7 @@ import AIReviewPanel from './AIReviewPanel.jsx';
 import {editorProjectSnapshot} from './aiEditCommands.js';
 import {renderProjectToWebM} from './editorExport.js';
 import {makeMediaThumbnail} from './mediaThumbnails.js';
+import {audioPeaksFromFile,recommendedPeakGain} from './mediaWaveform.js';
 import {captureVisualReview,reviewTimelineNotes} from './editorVisualReview.js';
 import {captureMotion,newMotionClip} from './editorMotion.js';
 import {detachAudioFromVideo,splitStereoAudio,rippleDelete,applyAudioPreset,syncLinkedAudio,splitLinkedVideoAudio,removeLinkedWithVideo} from './editorEnhancements.js';
@@ -306,6 +307,23 @@ export default function EditorWorkspace(){
  }
  function transition(id,type,duration){if(clips.find(c=>c.id===id)?.kind==='motion'){note('Transitions apply to media, not motion clips.');return}record();setClips(cs=>addTransition(cs,id,type,duration));setSelectedId(id);note(type==='none'?'Transition removed':type+' transition applied')}
  function addTrack(kind){const prefix=kind==='audio'?'A':'V',count=tracks.filter(t=>t.id.startsWith(prefix)).length;if(count>=12){note('Maximum 12 '+kind+' tracks');return}const number=tracks.reduce((m,t)=>t.id.startsWith(prefix)?Math.max(m,Number(t.id.slice(1))):m,0)+1;const track={id:prefix+number,label:(kind==='audio'?'Audio ':'Video ')+number,kind,z:kind==='audio'?0:number*10};setTracks(old=>kind==='audio'?[...old,track]:[track,...old]);note('Added '+track.label)}
+ function normalizeAudio(id){
+  const clip=clipsRef.current.find(c=>c.id===id);
+  const asset=assets.find(a=>a.id===clip?.assetId);
+  try{
+   if(!clip||!['audio','video'].includes(clip.kind))throw Error('Choose an audio or video clip');
+   const gain=recommendedPeakGain(asset?.waveform,clip.volume);
+   updateClip(id,{volume:gain});
+   note('Peak normalized clip: gain '+gain.toFixed(2)+'× (peak analysis, not LUFS).');
+  }catch(e){note(e.message)}
+ }
+ function populateWaveforms(items){
+  for(const item of items)if(['audio','video'].includes(item.kind)&&item.file&&!item.waveform){
+   audioPeaksFromFile(item.file).then(peaks=>{
+    if(peaks?.length)setAssets(current=>current.map(a=>a.id===item.id?{...a,waveform:peaks}:a));
+   }).catch(()=>{});
+  }
+ }
  function populateThumbnails(items){
   for(const a of items)makeMediaThumbnail(a.url,a.kind).then(thumb=>{
    if(thumb)setAssets(current=>current.map(x=>x.id===a.id?{...x,thumbnail:thumb}:x));
@@ -326,7 +344,7 @@ export default function EditorWorkspace(){
    const duration=await measureMedia(f,url,kind);
    collected.push({id:uid(),name:f.name,kind,type:f.type||'',duration,source,driveId:driveIds[f.name]||null,file:f,url,transcript:[]});
   }
-  setAssets(a=>[...a,...collected]);populateThumbnails(collected);if(collected.length)setSelectedAssetId(collected[0].id);
+  setAssets(a=>[...a,...collected]);populateThumbnails(collected);populateWaveforms(collected);if(collected.length)setSelectedAssetId(collected[0].id);
   note(collected.length+' files added to Project Files. Drag them to a track.');
   }catch(e){note(e.message||'Media import failed')}finally{fileImportActive.current=false;setBusy(false)}
  }
@@ -345,7 +363,7 @@ export default function EditorWorkspace(){
      collected.push({id:uid(),name:f.name,kind,type:f.type,duration,source:'drive',driveId:d.id,file:f,url,transcript:[]});
     }catch(e){note('Skipped '+d.name+': '+e.message)}
    }
-   setAssets(a=>[...a,...collected]);if(collected.length)setSelectedAssetId(collected[0].id);note(collected.length+' Drive files added. Drag them onto the timeline.');
+   setAssets(a=>[...a,...collected]);populateWaveforms(collected);if(collected.length)setSelectedAssetId(collected[0].id);note(collected.length+' Drive files added. Drag them onto the timeline.');
    }finally{fileImportActive.current=false;setBusy(false)}
   })}catch(e){note(e.message)}
  }
@@ -454,7 +472,7 @@ export default function EditorWorkspace(){
   try{const p=await loadBrowserProject();if(!p){note('No saved project found in this browser.');return}
    if(!isValidProject(p))throw Error('Saved project format is invalid');
    setPlaying(false);for(const a of assetRef.current)if(a.url)URL.revokeObjectURL(a.url);
-   setAssets(p.assets);populateThumbnails(p.assets.filter(a=>a.url));setClips(p.clips);setName(p.name);
+   setAssets(p.assets);populateThumbnails(p.assets.filter(a=>a.url));populateWaveforms(p.assets.filter(a=>a.file&&!a.waveform));setClips(p.clips);setName(p.name);
    setSettings({aspect:p.settings?.aspect||'16:9',fps:Number(p.settings?.fps)||30});
    setTracks(Array.isArray(p.settings?.tracks)&&p.settings.tracks.length?p.settings.tracks:TRACKS);
    setTrackMuted(p.settings?.trackMuted||{});setTrackSolo(p.settings?.trackSolo||{});
@@ -630,7 +648,7 @@ export default function EditorWorkspace(){
      </div><div className="ve-transport"><button onClick={()=>seek(0)} title="Go to start">⏮</button><button className="ve-play" onClick={togglePlay}>{playing?'❚❚':'▶'}</button><button onClick={()=>seek(Math.min(length,time+5))} title="Skip 5 seconds">⏭</button><span>{timeLabel(time)} / {timeLabel(length)}</span><div className="ve-transport-fill"/><span className="ve-status-mini">{playing?'PLAY':'EDIT'}</span></div>
    </section>
    {inspectorOpen&&<PanelSplitter label="Resize Inspector panel" value={panelLayout.inspector} min={220} max={700} onResize={resizeInspector} onReset={()=>setPanelLayout(p=>({...p,inspector:280}))}/>}
-   {inspectorOpen&&<EditorInspector clip={currentClip} asset={currentAsset} settings={settings} onSettings={setSettings} onPatch={updateClip} onTransition={transition} onSplit={split} onDelete={removeClip} onDetachAudio={detachAudio} onSplitStereo={separateStereoChannels} onRippleDelete={rippleRemove} onAudioPreset={audioPreset} time={time}/>}
+   {inspectorOpen&&<EditorInspector clip={currentClip} asset={currentAsset} settings={settings} onSettings={setSettings} onPatch={updateClip} onTransition={transition} onSplit={split} onDelete={removeClip} onDetachAudio={detachAudio} onSplitStereo={separateStereoChannels} onRippleDelete={rippleRemove} onAudioPreset={audioPreset} onNormalizeAudio={normalizeAudio} time={time}/>}
    <button className="ve-inspector-toggle" onClick={()=>setInspectorOpen(v=>!v)} title={inspectorOpen?'Hide inspector':'Show inspector'}>{inspectorOpen?'›':'‹'}</button>
   </div>
   <PanelSplitter axis="horizontal" label="Resize timeline height" value={panelLayout.timeline} min={200} max={850} onResize={resizeTimeline} onReset={()=>{setTimelineExpanded(false);setPanelLayout(p=>({...p,timeline:freshPanelLayout().timeline}))}}/>
