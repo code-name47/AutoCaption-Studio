@@ -64,6 +64,11 @@ export function animationFor(clip,clips,time){
    ||tracks.filter(c=>!clips.some(m=>m.id===c.targetClipId&&m.trackId===c.trackId&&time>=m.start&&time<clipEnd(m)))
         .sort((a,b)=>b.start-a.start)[0];
  if(!motion)return null;
+ if(motion.targetClipId!==clip.id){
+  const top=clips.filter(c=>c.kind!=='motion'&&c.trackId===clip.trackId&&time>=c.start&&time<clipEnd(c))
+   .sort((a,b)=>b.start-a.start||b.id.localeCompare(a.id))[0];
+  if(top?.id!==clip.id)return null;
+ }
  return animateAt(motion.keyframes,motion.inPoint+(time-motion.start)*(motion.speed||1));
 }
 export function resolvedClip(clip,clips,time){
