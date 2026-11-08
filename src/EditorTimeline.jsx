@@ -1,28 +1,49 @@
-import React,{useMemo,useRef,useState} from 'react';
+import React,{useEffect,useMemo,useRef,useState} from 'react';
+import {createPortal} from 'react-dom';
 import {clipEnd,clipLength,TRACKS} from './editorCore.js';
+import {overlaps} from './editorMotion.js';
 const CLOCK=n=>{const m=Math.floor(n/60),s=Math.floor(n%60);return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')};
-export default function EditorTimeline({tracks=TRACKS,clips,assets,time,zoom,setZoom,onSeek,onSelect,selectedId,onPlace,onMove,onTrim,onTrimStart,onTransition,onRemove,onAddTrack,trackMuted,onToggleTrackMute}){
- const [dragHint,setDragHint]=useState(''),[expanded,setExpanded]=useState(false),trimRef=useRef(null),scroller=useRef(null),rulerRef=useRef(null);
+export default function EditorTimeline({
+ tracks=TRACKS,clips,assets,time,zoom,setZoom,onSeek,onSelect,selectedId,onPlace,onMove,onTrim,onTrimStart,
+ onTransition,onRemove,onAddTrack,onRemoveTrack,onSplit,onDuplicate,onAddTitle,
+ trackMuted,onToggleTrackMute,recordingTrackId,onToggleRecord,onOpenInspector
+}){
+ const [dragHint,setDragHint]=useState(''),[expanded,setExpanded]=useState(false),[menu,setMenu]=useState(null);
+ const trimRef=useRef(null),scroller=useRef(null),rulerRef=useRef(null);
+ const transitions=useMemo(()=>overlaps(clips),[clips]);
  const total=Math.max(30,...clips.map(c=>clipEnd(c)+5));
  const width=Math.max(1100,total*zoom+300);
  const tick=Math.max(1,Math.round(100/zoom));
  const marks=useMemo(()=>Array.from({length:Math.ceil(total/tick)+1},(_,i)=>i*tick),[total,tick]);
+ useEffect(()=>{
+  if(!menu)return;
+  const close=()=>setMenu(null),escape=e=>{if(e.key==='Escape')close()};
+  document.addEventListener('pointerdown',close);window.addEventListener('keydown',escape);
+  return()=>{document.removeEventListener('pointerdown',close);window.removeEventListener('keydown',escape)};
+ },[menu]);
+ function showContext(e,trackId,clipId=null,overlapId=null){
+  e.preventDefault();e.stopPropagation();
+  setMenu({x:Math.max(8,Math.min(window.innerWidth-230,e.clientX)),y:Math.max(8,Math.min(window.innerHeight-350,e.clientY)),trackId,clipId,overlapId});
+  if(clipId)onSelect(clipId);
+ }
  const laneTime=(e,element)=>Math.max(0,(e.clientX-element.getBoundingClientRect().left)/zoom);
  const drop=(e,track)=>{
   e.preventDefault();setDragHint('');
-  if(e.dataTransfer.files?.length){return}
+  if(e.dataTransfer.files?.length)return;
   const asset=e.dataTransfer.getData('application/x-acs-asset');
   const clip=e.dataTransfer.getData('application/x-acs-clip');
   const transition=e.dataTransfer.getData('application/x-acs-transition');
   const seconds=laneTime(e,e.currentTarget);
   if(asset)onPlace(asset,track.id,seconds);
   else if(clip){const offset=Number(e.dataTransfer.getData('application/x-acs-offset'))||0;onMove(clip,track.id,seconds-offset)}
-  else if(transition){const target=clips.filter(c=>c.trackId===track.id).sort((a,b)=>Math.abs(a.start-seconds)-Math.abs(b.start-seconds))[0];if(target)onTransition(target.id,transition,.7)}
+  else if(transition){const target=clips.filter(c=>c.kind!=='motion'&&c.trackId===track.id).sort((a,b)=>Math.abs(a.start-seconds)-Math.abs(b.start-seconds))[0];if(target)onTransition(target.id,transition,.7)}
  };
  function beginTrim(e,clip,side){e.preventDefault();e.stopPropagation();onSelect(clip.id);onTrimStart?.();trimRef.current={id:clip.id,side,x:e.clientX,original:clip};e.currentTarget.setPointerCapture(e.pointerId)}
  function updateTrim(e){if(!trimRef.current)return;const r=trimRef.current;onTrim(r.id,r.side,(e.clientX-r.x)/zoom,r.original)}
  function endTrim(e){trimRef.current=null;try{e.currentTarget.releasePointerCapture(e.pointerId)}catch{}}
  function seekFrom(e){const rect=rulerRef.current?.getBoundingClientRect();if(!rect)return;onSeek(Math.max(0,(e.clientX-rect.left)/zoom))}
+ const action=(fn)=>()=>{setMenu(null);fn()};
+ const menuButton=(name,fn)=> <button role="menuitem" key={name} onClick={action(fn)}>{name}</button>;
  return <div className={"ve-timeline"+(expanded?" ve-expanded":"")}>
   <header className="ve-timeline-tools">
    <div className="ve-timeline-heading"><strong>Timeline</strong><span>{tracks.length} tracks</span></div>
@@ -42,30 +63,67 @@ export default function EditorTimeline({tracks=TRACKS,clips,assets,time,zoom,set
      </div>
     </div>
     <div className="ve-track-stack" style={{position:'relative'}}>
-    {tracks.map(track=><div key={track.id} className={'ve-track-row '+(dragHint===track.id?'ve-drop-over':'')}>
-      <div className="ve-track-label"><span className="ve-track-kind">{track.kind==='audio'?'♫':track.kind==='text'?'T':'▣'}</span><div><strong>{track.label}</strong><small>{track.id}</small></div><button className={trackMuted[track.id]?'ve-muted':''} onClick={()=>onToggleTrackMute(track.id)} title={trackMuted[track.id]?'Unmute track':'Mute track'}>{trackMuted[track.id]?'M×':'M'}</button></div>
-      <div className="ve-track-content" style={{width}} onDragOver={e=>{e.preventDefault();e.dataTransfer.dropEffect='move';setDragHint(track.id)}} onDragLeave={()=>setDragHint('')} onDrop={e=>drop(e,track)}
+    {tracks.map(track=><div key={track.id} className={'ve-track-row '+(dragHint===track.id?'ve-drop-over':'')} onContextMenu={e=>showContext(e,track.id)}>
+      <div className="ve-track-label">
+       <span className="ve-track-kind">{track.kind==='audio'?'♫':track.kind==='text'?'T':'▣'}</span>
+       <div><strong>{track.label}</strong><small>{track.id}</small></div>
+       <button className="ve-track-record" aria-label={'Record '+track.label} title={recordingTrackId===track.id?'Stop animation recording':'Record changes on this track'} aria-pressed={recordingTrackId===track.id} onClick={e=>{e.stopPropagation();onToggleRecord(track.id)}}>{recordingTrackId===track.id?'■':'●'}</button>
+       <button className={trackMuted[track.id]?'ve-muted':''} onClick={()=>onToggleTrackMute(track.id)} title={trackMuted[track.id]?'Unmute track':'Mute track'}>{trackMuted[track.id]?'M×':'M'}</button>
+      </div>
+      <div className="ve-track-content" style={{width}}
+       onDragOver={e=>{e.preventDefault();e.dataTransfer.dropEffect='move';setDragHint(track.id)}} onDragLeave={()=>setDragHint('')} onDrop={e=>drop(e,track)}
        onDoubleClick={e=>{if(e.target===e.currentTarget)onSeek(laneTime(e,e.currentTarget))}}>
        {clips.filter(c=>c.trackId===track.id).map(clip=>{
         const asset=assets.find(a=>a.id===clip.assetId),left=clip.start*zoom,span=Math.max(28,clipLength(clip)*zoom);
         const chosen=clip.id===selectedId;
-        return <div key={clip.id} className={'ve-clip '+(chosen?'ve-clip-selected ':'')+'ve-'+track.kind} style={{left,width:span,zIndex:chosen?10:Math.round(clip.start)+1,...(asset?.thumbnail?{backgroundImage:'linear-gradient(90deg,rgba(18,28,47,.74),rgba(18,28,47,.5)),url("'+asset.thumbnail+'")',backgroundSize:'cover',backgroundPosition:'center'}:{})}}
+        return <div key={clip.id} className={'ve-clip '+(chosen?'ve-clip-selected ':'')+'ve-'+(clip.kind==='motion'?'motion':track.kind)}
+         data-clip-id={clip.id}
+         style={{left,width:span,zIndex:chosen?20:Math.round(clip.start)+1,...(asset?.thumbnail?{backgroundImage:'linear-gradient(90deg,rgba(18,28,47,.74),rgba(18,28,47,.5)),url("'+asset.thumbnail+'")',backgroundSize:'cover',backgroundPosition:'center'}:{})}}
          draggable
          onDragStart={e=>{e.dataTransfer.setData('application/x-acs-clip',clip.id);e.dataTransfer.setData('application/x-acs-offset',String((e.clientX-e.currentTarget.getBoundingClientRect().left)/zoom));e.dataTransfer.effectAllowed='move';onSelect(clip.id)}}
          onDragOver={e=>e.preventDefault()}
          onDrop={e=>{const tr=e.dataTransfer.getData('application/x-acs-transition');if(tr){e.preventDefault();e.stopPropagation();onTransition(clip.id,tr,.7)}}}
-         onClick={e=>{e.stopPropagation();onSelect(clip.id);}}>
+         onContextMenu={e=>showContext(e,track.id,clip.id)}
+         onClick={e=>{e.stopPropagation();onSelect(clip.id)}}>
          <span className="ve-trim-handle ve-trim-start" draggable={false} title="Drag to trim start" onPointerDown={e=>beginTrim(e,clip,'start')} onPointerMove={updateTrim} onPointerUp={endTrim} onPointerCancel={endTrim}/>
-         <div className="ve-clip-content"><strong>{clip.kind==='text'?clip.text:(asset?.name||'Media unavailable')}</strong><small>{CLOCK(clipLength(clip))}{clip.transitionIn!=='none'?' • '+clip.transitionIn:''}</small></div>
+         <div className="ve-clip-content"><strong>{clip.kind==='motion'?'◆ Recorded animation':clip.kind==='text'?clip.text:(asset?.name||'Media unavailable')}</strong><small>{CLOCK(clipLength(clip))}{clip.transitionIn!=='none'?' · '+clip.transitionIn:''}{clip.kind==='motion'?' · '+(clip.keyframes?.length||0)+' keys':''}</small></div>
          <span className="ve-trim-handle ve-trim-end" draggable={false} title="Drag to trim end" onPointerDown={e=>beginTrim(e,clip,'end')} onPointerMove={updateTrim} onPointerUp={endTrim} onPointerCancel={endTrim}/>
         </div>;
        })}
+       {transitions.filter(o=>o.trackId===track.id).map(o=><div className="ve-overlap-marker" key={o.id} data-overlap-id={o.id}
+         title={'Automatic visual + audio crossfade: '+o.duration.toFixed(2)+' seconds · right-click for options'}
+         style={{left:o.start*zoom,width:Math.max(16,o.duration*zoom),zIndex:35}}
+         onClick={e=>{e.stopPropagation();onSelect(o.incomingId)}}
+         onContextMenu={e=>showContext(e,track.id,o.incomingId,o.id)}>↔</div>)}
       </div>
      </div>)}
      <div className="ve-playhead" style={{left:116+time*zoom}}><span className="ve-playhead-head"/></div>
     </div>
    </div>
   </div>
-  <footer className="ve-timeline-footer"><span>Drag media onto any compatible track. Drag clips to move; drag edges to trim. Double-click empty space to seek.</span><span>{CLOCK(time)} / {CLOCK(total)}</span></footer>
+  <footer className="ve-timeline-footer"><span>Overlap clips on one track for automatic crossfades (video + audio). Right-click clips for actions. ● records motion.</span><span>{CLOCK(time)} / {CLOCK(total)}</span></footer>
+  {menu&&createPortal(<div role="menu" aria-label="Timeline actions" className="ve-timeline-context" style={{left:menu.x,top:menu.y}} onPointerDown={e=>e.stopPropagation()}>
+    {menu.overlapId&&<div className="ve-context-note">Automatic crossfade — move clips apart to remove.</div>}
+    {menu.clipId&&<>
+     {menuButton('✂ Split at playhead',()=>onSplit(menu.clipId))}
+     {menuButton('⧉ Duplicate clip / animation',()=>onDuplicate(menu.clipId))}
+     {menuButton('◈ Cross dissolve',()=>onTransition(menu.clipId,'crossfade',.7))}
+     {menuButton('◐ Fade in',()=>onTransition(menu.clipId,'fade',.7))}
+     {menuButton('▧ Wipe transition',()=>onTransition(menu.clipId,'wipe',.7))}
+     {menuButton('✕ Remove transition',()=>onTransition(menu.clipId,'none',.7))}
+     {menuButton('☷ Open effects & properties',()=>onOpenInspector(menu.clipId))}
+     <hr/>
+     {menuButton('🗑 Remove clip from track',()=>onRemove(menu.clipId))}
+    </>}
+    {!menu.clipId&&<>
+     {menuButton(recordingTrackId===menu.trackId?'■ Stop recording':'● Record motion on track',()=>onToggleRecord(menu.trackId))}
+     {menuButton('＋ Add video track',()=>onAddTrack('video'))}
+     {menuButton('＋ Add audio track',()=>onAddTrack('audio'))}
+     {tracks.find(t=>t.id===menu.trackId)?.kind==='text'&&menuButton('T Add text at playhead',()=>onAddTitle(menu.trackId))}
+     {menuButton(trackMuted[menu.trackId]?'Unmute track':'Mute track',()=>onToggleTrackMute(menu.trackId))}
+     <hr/>
+     {menuButton('Remove track',()=>onRemoveTrack(menu.trackId))}
+    </>}
+   </div>,document.body)}
  </div>;
 }
