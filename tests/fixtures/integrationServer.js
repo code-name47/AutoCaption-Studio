@@ -5,6 +5,7 @@ import express from 'express';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import bridgeRouter from '../../server/bridge.js';
+import mcpOAuthRouter from '../../server/mcp-oauth.js';
 import googleAuthRouter,{createBrowserLoginForIntegrationTest} from '../../server/google-auth.js';
 
 if(process.env.NODE_ENV!=='test')throw Error('Integration fixture may only run with NODE_ENV=test');
@@ -20,6 +21,7 @@ app.get('/__integration/login',(req,res)=>{
  res.cookie(seeded.cookieName,seeded.cookieValue,{httpOnly:true,sameSite:'lax',path:'/'});
  return res.redirect('/');
 });
+app.use(mcpOAuthRouter);
 app.use('/api/bridge',express.json({limit:'1mb'}),bridgeRouter);
 app.use('/auth/google',googleAuthRouter);
 app.use(express.static(path.join(root,'dist')));
