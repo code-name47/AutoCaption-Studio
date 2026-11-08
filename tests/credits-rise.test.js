@@ -34,3 +34,23 @@ test('credits-style caption rises from below frame and holds with a gentle upwar
  assert.ok(ending<landed&&ending>=77);
  assert.equal(risingTextPosition({...c,transitionIn:'none'},.2),80);
 });
+
+
+test('one AI action styles every caption and preserves video and gold closing text',()=>{
+ const p=project();
+ const first=p.clips[0];
+ const second={...first,id:'caption-2',start:2,text:'Final line',fontColor:'#FFE4A8'};
+ p.clips.push(second,newClip({kind:'video',duration:5},'V1',0,'video-1'));
+ const result=applyEditorAction(p,{type:'style_captions',font_size:40,last_font_size:44,position_y:80,rise_duration:.4});
+ const [a,b,v]=result.project.clips;
+ assert.equal(a.fontSize,40);
+ assert.equal(b.fontSize,44);
+ assert.equal(a.positionY,80);
+ assert.equal(b.transitionIn,'rise');
+ assert.equal(b.transitionDuration,.4);
+ assert.equal(b.fontColor,'#FFE4A8');
+ assert.equal(v.kind,'video');
+ assert.equal(v.transitionIn,'none');
+ assert.equal(p.clips[0].fontSize,36);
+ assert.throws(()=>applyEditorAction(p,{type:'style_captions',font_size:999,last_font_size:44,position_y:80,rise_duration:.4}),/font size/);
+});
