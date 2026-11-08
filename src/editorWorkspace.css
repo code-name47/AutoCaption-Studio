@@ -96,11 +96,11 @@ body.ve-app-mode,body.ve-app-mode #root{height:100dvh;min-height:0;margin:0;over
 .ve-timeline-body{position:relative;min-width:100%;padding-bottom:12px}
 .ve-ruler-row,.ve-track-row{display:flex;flex-direction:row;min-height:0}
 .ve-ruler-row{position:sticky;top:0;height:31px;background:#0d1727;border-bottom:1px solid #36455e;z-index:13}
-.ve-ruler-label{width:116px;flex:0 0 116px;position:sticky;left:0;z-index:14;background:#162237;border-right:1px solid #34445b;color:#93a5bd;display:flex;align-items:center;padding-left:10px;font-size:9px;letter-spacing:1px}
+.ve-ruler-label{width:var(--ve-track-label-width,116px);flex:0 0 var(--ve-track-label-width,116px);position:sticky;left:0;z-index:14;background:#162237;border-right:1px solid #34445b;color:#93a5bd;display:flex;align-items:center;padding-left:10px;font-size:9px;letter-spacing:1px}
 .ve-ruler{position:relative;height:30px;cursor:crosshair;background:linear-gradient(0deg,#1b2b43,#0d1727)}
 .ve-ruler-mark{position:absolute;top:0;bottom:0;border-left:1px solid #4b5c74;padding:3px 0 0 4px;font-variant-numeric:tabular-nums;font-size:9px;color:#9aaecb;white-space:nowrap;pointer-events:none}
 .ve-track-row{height:59px;position:relative;border-bottom:1px solid #26374e}
-.ve-track-label{width:116px;flex:0 0 116px;position:sticky;left:0;z-index:11;background:#152338;border-right:1px solid #35445b;display:flex;align-items:center;gap:7px;padding:6px;min-width:0}
+.ve-track-label{width:var(--ve-track-label-width,116px);flex:0 0 var(--ve-track-label-width,116px);position:sticky;left:0;z-index:11;background:#152338;border-right:1px solid #35445b;display:flex;align-items:center;gap:7px;padding:6px;min-width:0}
 .ve-track-kind{display:inline-flex;width:24px;height:24px;justify-content:center;align-items:center;border-radius:6px;background:#273957;color:#b8c9e9}
 .ve-track-label div{flex:1;min-width:0}.ve-track-label strong,.ve-track-label small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ve-track-label strong{font-size:10px}.ve-track-label small{font-size:9px;color:#788fab}
@@ -287,3 +287,9 @@ body.ve-is-resizing,body.ve-is-resizing *{
 .ve-ai-busy .ve-main,.ve-ai-busy>.ve-timeline,.ve-ai-busy>.ve-panel-splitter{pointer-events:none}
 .ve-ai-busy .ve-playhead{filter:drop-shadow(0 0 8px #e8cc92)}
 @media(max-width:600px){.ve-ai-review{bottom:30px;right:8px;width:calc(100vw - 16px);max-height:55vh}}
+
+/* Track header resizing: the ruler, track labels and playhead share one width variable. */
+.ve-track-label-resizer{position:absolute;right:-6px;top:0;bottom:0;width:12px;cursor:col-resize;touch-action:none;z-index:30;background:transparent;outline-offset:-2px}
+.ve-track-label-resizer:hover,.ve-track-label-resizer:focus-visible{background:#8e8bfa80}
+.ve-track-label-resizer::after{content:'';position:absolute;right:5px;top:5px;bottom:5px;width:2px;background:#6e88a9;border-radius:1px}
+.ve-track-label strong{font-size:11px}
