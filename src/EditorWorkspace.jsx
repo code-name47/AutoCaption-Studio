@@ -152,8 +152,10 @@ export default function EditorWorkspace(){
   animation=requestAnimationFrame(frame);return()=>cancelAnimationFrame(animation);
  },[playing,length]);
  function togglePlay(){if(sourceViewer){setSourceViewer(false);setPlaying(true);return}if(!clips.length){note('Add a clip to a track to play the timeline.');return}if(timeRef.current>=length-.05){setTime(0);timeRef.current=0}setPlaying(v=>!v)}
- function removeClip(id){if(recording.current?.targetClipId===id)stopRecording();record();setClips(cs=>removeLinkedWithVideo(cs,id));if(selectedId===id)setSelectedId('');setPlaying(false)}
- function updateClip(id,patch){if(recording.current?.targetClipId!==id)record();setClips(cs=>{
+ function removeClip(id){if(clipsRef.current.find(c=>c.id===id)?.locked){note('Unlock this clip before deleting it.');return}if(recording.current?.targetClipId===id)stopRecording();record();setClips(cs=>removeLinkedWithVideo(cs,id));if(selectedId===id)setSelectedId('');setPlaying(false)}
+ function updateClip(id,patch){if(clipsRef.current.find(c=>c.id===id)?.locked&&!(Object.keys(patch).length===1&&patch.locked===false)){
+  note('Unlock this clip before editing it.');return
+ }if(recording.current?.targetClipId!==id)record();setClips(cs=>{
    const source=cs.find(c=>c.id===id);
    const preserve=source?.kind==='audio'&&source.linkedSourceId&&
     ['start','inPoint','outPoint','speed'].some(k=>Object.hasOwn(patch,k));
@@ -198,8 +200,9 @@ export default function EditorWorkspace(){
   timeRef.current=start;setTime(start);setSelectedId(target.id);setSourceViewer(false);setRecordingTrackId(trackId);setPlaying(true);
   note('Recording '+trackId+' — drag or resize in the preview, or change Inspector values. Press ■ to stop.');
  }
- function transformStart(id){if(recording.current?.targetClipId!==id)record()}
+ function transformStart(id){if(clipsRef.current.find(c=>c.id===id)?.locked)return;if(recording.current?.targetClipId!==id)record()}
  function transformLive(id,patch){
+  if(clipsRef.current.find(c=>c.id===id)?.locked)return;
   setClips(cs=>cs.map(c=>c.id===id?{...c,...patch}:c));
   captureKeyframe(id,patch);
  }
@@ -269,6 +272,7 @@ export default function EditorWorkspace(){
   finally{setBusy(false)}
  }
  function rippleRemove(id){
+  if(clipsRef.current.find(c=>c.id===id)?.locked){note('Unlock this clip before ripple deleting.');return}
   try{const updated=rippleDelete(clipsRef.current,id);
    record();setClips(updated);setSelectedId('');setPlaying(false);
    note('Ripple removed clip and shifted subsequent clips earlier.');
@@ -285,7 +289,7 @@ export default function EditorWorkspace(){
   if(!a||!accepts(a,trackId)){note('This media type cannot be placed on that track.');return}
   record();const c=newClip(a,trackId,at,uid());setClips(cs=>[...cs,c]);setSelectedId(c.id);setSourceViewer(false);note(a.name+' added to '+trackId);
  }
- function moveClip(id,trackId,at){const c=clips.find(x=>x.id===id);const asset=assets.find(a=>a.id===c?.assetId);
+ function moveClip(id,trackId,at){const c=clips.find(x=>x.id===id);if(c?.locked){note('Unlock the clip before moving it.');return}const asset=assets.find(a=>a.id===c?.assetId);
   if(!c||!accepts(asset||{kind:c.kind},trackId)){note('Incompatible track type');return}
   record();setClips(cs=>{
    let result=placeClip(cs,id,trackId,at,8/zoom);
@@ -295,17 +299,17 @@ export default function EditorWorkspace(){
    }
    return result;
   });setSelectedId(id);setSourceViewer(false)}
- function split(id){const c=clips.find(x=>x.id===id);if(c?.kind==='motion'){note('To split an animation, duplicate it and trim the copies.');return}const parts=splitClip(c,timeRef.current,uid());if(!parts){note('Move the playhead inside the selected clip before splitting.');return}record();setClips(cs=>{
+ function split(id){const c=clips.find(x=>x.id===id);if(c?.locked){note('Unlock the clip before splitting it.');return}if(c?.kind==='motion'){note('To split an animation, duplicate it and trim the copies.');return}const parts=splitClip(c,timeRef.current,uid());if(!parts){note('Move the playhead inside the selected clip before splitting.');return}record();setClips(cs=>{
    const split=cs.flatMap(x=>x.id===id?parts:[x]);
    return c.kind==='video'?splitLinkedVideoAudio(split,id,parts,uid()):split;
   });setSelectedId(parts[1].id);note('Clip split at '+timeLabel(timeRef.current))}
- function trim(id,edge,delta,original){const asset=assets.find(x=>x.id===original.assetId);
+ function trim(id,edge,delta,original){if(original.locked)return;const asset=assets.find(x=>x.id===original.assetId);
   setClips(cs=>{
    const updated=cs.map(c=>c.id===id?trimClip(original,edge,delta,asset?.duration):c);
    return original.kind==='video'?syncLinkedAudio(updated,id):updated;
   });
  }
- function transition(id,type,duration){if(clips.find(c=>c.id===id)?.kind==='motion'){note('Transitions apply to media, not motion clips.');return}record();setClips(cs=>addTransition(cs,id,type,duration));setSelectedId(id);note(type==='none'?'Transition removed':type+' transition applied')}
+ function transition(id,type,duration){if(clips.find(c=>c.id===id)?.locked){note('Unlock clip before changing transitions.');return}if(clips.find(c=>c.id===id)?.kind==='motion'){note('Transitions apply to media, not motion clips.');return}record();setClips(cs=>addTransition(cs,id,type,duration));setSelectedId(id);note(type==='none'?'Transition removed':type+' transition applied')}
  function addTrack(kind){const prefix=kind==='audio'?'A':'V',count=tracks.filter(t=>t.id.startsWith(prefix)).length;if(count>=12){note('Maximum 12 '+kind+' tracks');return}const number=tracks.reduce((m,t)=>t.id.startsWith(prefix)?Math.max(m,Number(t.id.slice(1))):m,0)+1;const track={id:prefix+number,label:(kind==='audio'?'Audio ':'Video ')+number,kind,z:kind==='audio'?0:number*10};setTracks(old=>kind==='audio'?[...old,track]:[track,...old]);note('Added '+track.label)}
  function normalizeAudio(id){
   const clip=clipsRef.current.find(c=>c.id===id);
