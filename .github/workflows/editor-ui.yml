@@ -1,0 +1,48 @@
+name: Editor UI smoke tests
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  chromium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        # CI only builds/tests the browser and bridge. Skip ffmpeg-static's
+        # external binary download (which sometimes returns 504 on GitHub Actions).
+        run: npm install --no-audit --no-fund --ignore-scripts
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build application
+        run: npm run build
+      - name: Test interactive editor
+        run: npm run test:ui
+      - name: Test real AI MCP commands operating the browser
+        run: npx playwright test --config playwright.integration.config.js
+      - name: Upload proof of live AI browser edits
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-edits-live-browser-proof
+          path: |
+            test-results/ai-run-evidence/
+            test-results/ai-real-run/
+          retention-days: 7
+      - name: Upload browser test report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-ui-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

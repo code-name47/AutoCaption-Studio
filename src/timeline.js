@@ -1,0 +1,2 @@
+export function totalDuration(track,assets){return track.reduce((sum,clip)=>sum+Math.max(0,assets.find(a=>a.id===clip.assetId)?.duration||0),0)}
+export function getActiveClip(track,assets,time){let start=0;const total=totalDuration(track,assets);for(let i=0;i<track.length;i++){const clip=track[i];const duration=Math.max(0,assets.find(a=>a.id===clip.assetId)?.duration||0);if(duration>0&&(time<start+duration||(i===track.length-1&&time<=total))){return {...clip,localTime:Math.max(0,Math.min(duration,time-start)),start,duration}}start+=duration}return null}

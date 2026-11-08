@@ -1,0 +1,182 @@
+import React,{useEffect,useMemo,useRef,useState} from 'react';
+import {activeClips,clipEnd,renderOpacity,transitionProgress,trackFor} from './editorCore.js';
+import {resolvedClip,visualClipOpacity,audioClipGain,clamp,captureMotion,risingTextPosition} from './editorMotion.js';
+import {attachAudioGraph,audioTrackEnabled} from './editorAudio.js';
+import ChromaLayer from './ChromaLayer.jsx';
+import {cropClipPath} from './editorEnhancements.js';
+
+const between=(n,a,b)=>Math.min(b,Math.max(a,n));
+function layerStyle(clip,time,clips){
+ const progress=transitionProgress(clip,time);
+ const alpha=visualClipOpacity(clip,clips,time);
+ const style={opacity:between(alpha,0,1),zIndex:trackFor(clip.trackId)?.z||1,
+  transform:'translate('+clip.offsetX+'%, '+clip.offsetY+'%) scale('+clip.scale+') rotate('+clip.rotation+'deg)',
+  filter:'brightness('+clip.brightness+') contrast('+clip.contrast+') saturate('+clip.saturation+') hue-rotate('+(clip.hueRotate??0)+'deg) blur('+(clip.blur??0)+'px)'};
+ if(clip.kind==='video'||clip.kind==='image')style.clipPath=cropClipPath(clip,clip.transitionIn==='wipe'?(1-progress)*100:0);
+ if(clip.transitionIn==='slide')style.transform='translateX('+((1-progress)*100)+'%) '+style.transform;
+ return style;
+}
+function selectionGeometry(c,size){
+ const isText=c.kind==='text';
+ const scale=Math.max(.05,Number(c.scale)||1);
+ const fontsize=Math.max(1,Number(c.fontSize)||1);
+ const lines=String(c.text||'').split('\n');
+ const longest=Math.max(1,...lines.map(s=>s.length));
+ const textUnit=fontsize*size.w/1280;
+ const width=isText?between(longest*textUnit*.67+24,26,size.w*1.8)*scale:size.w*scale;
+ const height=isText?Math.max(18,lines.length*textUnit*1.3+16)*scale:size.h*scale;
+ return {
+  left:(isText?50:50)+(Number(c.offsetX)||0),
+  top:(isText?(Number(c.positionY)??50):50)+(Number(c.offsetY)||0),
+  width,height,rotation:Number(c.rotation)||0
+ };
+}
+export default function EditorPreview({
+ assets,clips,time,playing,onSelect,selectedId,aspect='16:9',trackMuted={},trackSolo={},
+ onTransformStart,onTransform,onTransformEnd,viewZoom=70
+}){
+ const nodes=useRef(new Map()),stage=useRef(null),pasteboard=useRef(null),gesture=useRef(null);
+ const audioCtx=useRef(null),routes=useRef(new Map());
+ const [size,setSize]=useState({w:720,h:405}),[available,setAvailable]=useState({w:900,h:500});
+ useEffect(()=>{
+  if(!pasteboard.current)return;
+  const measure=()=>{const r=pasteboard.current?.getBoundingClientRect();if(r?.width&&r?.height)setAvailable({w:r.width,h:r.height})};
+  measure();if(typeof ResizeObserver==='undefined')return;
+  const observer=new ResizeObserver(measure);observer.observe(pasteboard.current);return()=>observer.disconnect();
+ },[]);
+ useEffect(()=>{
+  if(!stage.current)return;
+  const measure=()=>{const r=stage.current?.getBoundingClientRect();if(r&&r.width&&r.height)setSize({w:r.width,h:r.height})};
+  measure();
+  if(typeof ResizeObserver==='undefined')return;
+  const observer=new ResizeObserver(measure);observer.observe(stage.current);return()=>observer.disconnect();
+ },[aspect]);
+ const visible=useMemo(()=>activeClips(clips,time).map(c=>resolvedClip(c,clips,time)),[clips,time]);
+ const visibleIds=visible.map(c=>c.id).join(',');
+ useEffect(()=>{
+  for(const [id,route] of routes.current){
+   if(!nodes.current.has(id)){route.dispose();routes.current.delete(id)}
+  }
+  for(const [id,element] of nodes.current){
+   const original=clips.find(c=>c.id===id),clip=original&&resolvedClip(original,clips,time);
+   const asset=assets.find(a=>a.id===clip?.assetId);
+   const isActive=clip&&time>=clip.start&&time<clipEnd(clip)&&asset?.url;
+   const enable=Boolean(clip&&audioTrackEnabled(clip.trackId,trackMuted,trackSolo));
+   if(!isActive){element.pause();routes.current.get(id)?.setGain(0);continue}
+   const target=between(clip.inPoint+(time-clip.start)*clip.speed,clip.inPoint,clip.outPoint);
+   if(element.readyState>=1&&Math.abs(element.currentTime-target)>.3){try{element.currentTime=target}catch{}}
+   element.playbackRate=between(clip.speed,.25,4);
+   let route=routes.current.get(id);
+   if(!route&&typeof window!=='undefined'&&(window.AudioContext||window.webkitAudioContext)){
+    try{
+     if(!audioCtx.current)audioCtx.current=new (window.AudioContext||window.webkitAudioContext)();
+     route=attachAudioGraph(audioCtx.current,element,audioCtx.current.destination,clip);
+     routes.current.set(id,route);
+    }catch(error){console.warn('Preview audio routing unavailable:',error)}
+   }
+   const gain=enable?audioClipGain(clip,clips,time):0;
+   if(route){route.update(clip);route.setGain(gain);element.volume=1}
+   else element.volume=between(gain,0,1);
+   if(playing){if(element.paused)element.play().catch(()=>{})}
+   else if(!element.paused)element.pause();
+  }
+  if(playing&&audioCtx.current?.state==='suspended')audioCtx.current.resume().catch(()=>{});
+ },[time,playing,visibleIds,clips,assets,trackMuted,trackSolo]);
+ useEffect(()=>()=>{for(const el of nodes.current.values())el.pause();
+  for(const route of routes.current.values())route.dispose();routes.current.clear();
+  audioCtx.current?.close().catch(()=>{});
+ },[]);
+ function begin(e,clip,mode='move'){
+  if(e.button!==0)return;
+  e.preventDefault();e.stopPropagation();
+  onSelect?.(clip.id);
+  onTransformStart?.(clip.id);
+  gesture.current={id:clip.id,mode,startX:e.clientX,startY:e.clientY,values:captureMotion(clip)};
+  e.currentTarget.setPointerCapture(e.pointerId);
+ }
+ function pointerMove(e){
+  const g=gesture.current;if(!g)return;e.stopPropagation();
+  const dx=e.clientX-g.startX,dy=e.clientY-g.startY;
+  let change;
+  if(g.mode.startsWith('resize')){
+   const sx=g.mode.endsWith('nw')||g.mode.endsWith('sw')?-1:1;
+   const sy=g.mode.endsWith('nw')||g.mode.endsWith('ne')?-1:1;
+   const factor=Math.max(.03,1+(dx*sx+dy*sy*.6)/Math.max(70,size.w*.3));
+   const original=visible.find(c=>c.id===g.id);
+   change=original?.kind==='text'?{fontSize:Math.round(clamp(g.values.fontSize*factor,1,500)*10)/10}
+    :{scale:Math.round(clamp(g.values.scale*factor,.05,10)*1000)/1000};
+  }else{
+   change={offsetX:Math.round(clamp(g.values.offsetX+dx/size.w*100,-300,300)*100)/100,
+    offsetY:Math.round(clamp(g.values.offsetY+dy/size.h*100,-300,300)*100)/100};
+  }
+  onTransform?.(g.id,change);
+ }
+ function pointerEnd(e){
+  if(!gesture.current)return;e.stopPropagation();
+  onTransformEnd?.(gesture.current.id);
+  gesture.current=null;try{e.currentTarget.releasePointerCapture(e.pointerId)}catch{}
+ }
+ const selected=visible.find(c=>c.id===selectedId&&c.kind!=='audio'&&!c.trackId.startsWith('A'));
+ const ratio=aspect==='9:16'?9/16:aspect==='1:1'?1:16/9;
+ const fitWidth=Math.min(available.w*.92,available.h*.84*ratio);
+ const frameWidth=Math.max(60,fitWidth*clamp(viewZoom/100,.3,1.6));
+ const frameStyle={width:frameWidth+'px',height:(frameWidth/ratio)+'px',aspectRatio:String(ratio),maxHeight:'none',maxWidth:'none'};
+ const guide=selected&&selectionGeometry(selected.kind==='text'&&selected.transitionIn==='rise'?{...selected,positionY:risingTextPosition(selected,time)}:selected,size);
+ const offscreen=guide&&(guide.left<0||guide.left>100||guide.top<0||guide.top>100);
+ return <div className="ve-stage-pasteboard" ref={pasteboard}>
+  <div ref={stage} className="ve-stage-frame" data-aspect={aspect} style={frameStyle}>
+   <div className="ve-stage-art">
+    <div className="ve-stage-checker"><span>PROGRAM FRAME · {aspect}</span></div>
+    {visible.map(clip=>{
+     const asset=assets.find(a=>a.id===clip.assetId),position=layerStyle(clip,time,clips);
+     const active=clip.id===selectedId;
+     const common={onPointerDown:e=>begin(e,clip),onPointerMove:pointerMove,onPointerUp:pointerEnd,onPointerCancel:pointerEnd};
+     if(clip.kind==='text'){
+      const cssSize=Math.max(.5,(Number(clip.fontSize)||1)*size.w/1280);
+      return <div key={clip.id} {...common} className={'ve-stage-text '+(active?'ve-selected-layer':'')} style={{
+       ...position,top:(risingTextPosition(clip,time)+Number(clip.offsetY||0))+'%',
+       left:(50+Number(clip.offsetX||0))+'%',transform:'translate(-50%,-50%) scale('+clip.scale+') rotate('+clip.rotation+'deg)',
+       fontSize:cssSize+'px',lineHeight:1.3,
+       fontFamily:clip.fontFamily,color:clip.fontColor,fontWeight:clip.fontWeight,
+       WebkitTextStroke:((clip.textOutlineWidth||0)*size.w/1280)+'px '+(clip.textOutlineColor||'#000000'),
+       textShadow:'0 1px '+Math.max(0,8*size.w/1280)+'px rgba(0,0,0,'+(clip.textShadow??.9)+')',
+       textAlign:'center',whiteSpace:'pre-wrap',maxWidth:'190%',width:'max-content'
+      }}>{clip.text}</div>;
+     }
+     if(!asset?.url)return null;
+     if(clip.kind==='image')return clip.chromaKey?
+      <ChromaLayer key={clip.id} clip={clip} sourceUrl={asset.url} playing={playing} stageSize={size} style={position} selected={active} {...common}/>:
+      <img key={clip.id} {...common} className={'ve-stage-layer '+(active?'ve-selected-layer':'')} src={asset.url} style={position} alt={asset.name}/>;
+     const audioOnly=clip.trackId.startsWith('A')||clip.kind==='audio';
+     const keyed=Boolean(clip.chromaKey&&!audioOnly);
+     return <React.Fragment key={clip.id}>
+      <video ref={el=>{if(el)nodes.current.set(clip.id,el);else nodes.current.delete(clip.id)}}
+       {...(keyed?{}:common)}
+       onLoadedMetadata={e=>{const el=e.currentTarget;if(Math.abs(el.currentTime-(clip.inPoint+(time-clip.start)*clip.speed))>.2)el.currentTime=Math.max(0,clip.inPoint+(time-clip.start)*clip.speed);if(playing)el.play().catch(()=>{})}}
+       src={asset.url} playsInline preload="auto" controls={false} className={'ve-stage-layer '+(audioOnly||keyed?'ve-hidden-audio ':'')+(active?'ve-selected-layer':'')} style={keyed?{display:'none'}:position}/>
+      {keyed&&<ChromaLayer clip={clip} sourceUrl={asset.url} getMedia={()=>nodes.current.get(clip.id)}
+       playing={playing} stageSize={size} style={position} selected={active} {...common}/>}
+     </React.Fragment>;
+    })}
+    {!visible.some(c=>c.kind!=='audio'&&!c.trackId.startsWith('A'))&&<div className="ve-empty-stage">{clips.length?'No visual clips at this time':'Drag videos onto the timeline to start editing'}</div>}
+   </div>
+   {offscreen&&<div className="ve-offscreen-indicator" role="status"
+     style={{left:clamp(guide.left,7,93)+'%',top:clamp(guide.top,7,93)+'%'}}
+     title="The selected object is outside the export frame. Drag it or zoom out to see the full bounds."
+     onPointerDown={e=>begin(e,selected)} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd}>
+      ◇ Off-canvas · drag here
+    </div>}
+   {guide&&<div className="ve-object-outline" data-clip-id={selected.id} style={{
+     left:guide.left+'%',top:guide.top+'%',width:guide.width,height:guide.height,
+     transform:'translate(-50%,-50%) rotate('+guide.rotation+'deg)'
+   }} onPointerDown={e=>begin(e,selected)} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd}>
+    <div className="ve-object-label">{selected.kind==='text'?'TEXT':'MEDIA'} · drag to move</div>
+    <span className="ve-corner ve-corner-nw" onPointerDown={e=>begin(e,selected,'resize-nw')} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} aria-label="Resize selected object"/>
+    <span className="ve-corner ve-corner-ne" onPointerDown={e=>begin(e,selected,'resize-ne')} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd}/>
+    <span className="ve-corner ve-corner-sw" onPointerDown={e=>begin(e,selected,'resize-sw')} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd}/>
+    <span className="ve-corner ve-corner-se" onPointerDown={e=>begin(e,selected,'resize-se')} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd}/>
+   </div>}
+  </div>
+  <div className="ve-frame-status">White frame = exported area · Outlined objects remain editable outside it</div>
+ </div>;
+}

@@ -1,0 +1,22 @@
+name: Build web application
+on:
+  push:
+    branches: [main, feature/secure-transcription-starter]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        # CI only builds/tests the browser and bridge. Skip ffmpeg-static's
+        # external binary download (which sometimes returns 504 on GitHub Actions).
+        run: npm install --no-audit --no-fund --ignore-scripts
+      - name: Build frontend
+        run: npm run build

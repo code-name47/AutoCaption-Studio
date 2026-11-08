@@ -1,0 +1,32 @@
+name: Security tests
+
+on:
+  push:
+    branches:
+      - feature/secure-transcription-starter
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        # CI only builds/tests the browser and bridge. Skip ffmpeg-static's
+        # external binary download (which sometimes returns 504 on GitHub Actions).
+        run: npm install --no-audit --no-fund --ignore-scripts
+      - name: Run security tests
+        run: npm test
+      - name: Build application
+        run: npm run build
