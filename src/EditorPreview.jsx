@@ -66,11 +66,13 @@ export default function EditorPreview({
   e.currentTarget.setPointerCapture(e.pointerId);
  }
  function pointerMove(e){
-  const g=gesture.current;if(!g)return;
+  const g=gesture.current;if(!g)return;e.stopPropagation();
   const dx=e.clientX-g.startX,dy=e.clientY-g.startY;
   let change;
-  if(g.mode==='resize'){
-   const factor=Math.max(.03,1+(dx+dy*.6)/Math.max(70,size.w*.3));
+  if(g.mode.startsWith('resize')){
+   const sx=g.mode.endsWith('nw')||g.mode.endsWith('sw')?-1:1;
+   const sy=g.mode.endsWith('nw')||g.mode.endsWith('ne')?-1:1;
+   const factor=Math.max(.03,1+(dx*sx+dy*sy*.6)/Math.max(70,size.w*.3));
    const original=visible.find(c=>c.id===g.id);
    change=original?.kind==='text'?{fontSize:Math.round(clamp(g.values.fontSize*factor,1,500)*10)/10}
     :{scale:Math.round(clamp(g.values.scale*factor,.05,10)*1000)/1000};
@@ -81,7 +83,7 @@ export default function EditorPreview({
   onTransform?.(g.id,change);
  }
  function pointerEnd(e){
-  if(!gesture.current)return;
+  if(!gesture.current)return;e.stopPropagation();
   onTransformEnd?.(gesture.current.id);
   gesture.current=null;try{e.currentTarget.releasePointerCapture(e.pointerId)}catch{}
  }
@@ -129,10 +131,10 @@ export default function EditorPreview({
      transform:'translate(-50%,-50%) rotate('+guide.rotation+'deg)'
    }} onPointerDown={e=>begin(e,selected)} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd}>
     <div className="ve-object-label">{selected.kind==='text'?'TEXT':'MEDIA'} · drag to move</div>
-    <span className="ve-corner ve-corner-nw" onPointerDown={e=>begin(e,selected,'resize')} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} aria-label="Resize selected object"/>
-    <span className="ve-corner ve-corner-ne" onPointerDown={e=>begin(e,selected,'resize')} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd}/>
-    <span className="ve-corner ve-corner-sw" onPointerDown={e=>begin(e,selected,'resize')} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd}/>
-    <span className="ve-corner ve-corner-se" onPointerDown={e=>begin(e,selected,'resize')} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd}/>
+    <span className="ve-corner ve-corner-nw" onPointerDown={e=>begin(e,selected,'resize-nw')} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} aria-label="Resize selected object"/>
+    <span className="ve-corner ve-corner-ne" onPointerDown={e=>begin(e,selected,'resize-ne')} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd}/>
+    <span className="ve-corner ve-corner-sw" onPointerDown={e=>begin(e,selected,'resize-sw')} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd}/>
+    <span className="ve-corner ve-corner-se" onPointerDown={e=>begin(e,selected,'resize-se')} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd}/>
    </div>}
   </div>
   <div className="ve-frame-status">White frame = exported area · Outlined objects remain editable outside it</div>
