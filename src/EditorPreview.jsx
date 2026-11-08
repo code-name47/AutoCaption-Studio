@@ -75,7 +75,7 @@ export default function EditorPreview({
    }
    const gain=enable?audioClipGain(clip,clips,time):0;
    if(route){route.update(clip);route.setGain(gain);element.volume=1}
-   else element.volume=gain;
+   else element.volume=between(gain,0,1);
    if(playing){if(element.paused)element.play().catch(()=>{})}
    else if(!element.paused)element.pause();
   }
