@@ -3,6 +3,7 @@
 // are sent to the authenticated AI bridge when the user clicks Share.
 import {activeClips,clipEnd,timelineDuration,transitionProgress} from './editorCore.js';
 import {resolvedClip,visualClipOpacity,risingTextPosition} from './editorMotion.js';
+import {renderKeyedImage} from './editorChroma.js';
 
 const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
 const round=n=>Math.round(n*100)/100;
@@ -134,13 +135,14 @@ function drawCaption(ctx,clip,width,height,time){
  const lines=String(clip.text||'').split('\n');
  ctx.fillStyle=clip.fontColor||'#ffffff';
  ctx.font=(clip.fontWeight||700)+' '+Math.max(.5,size)+'px '+(clip.fontFamily||'Arial');
- ctx.textAlign='center';ctx.textBaseline='middle';ctx.shadowColor='rgba(0,0,0,.88)';ctx.shadowBlur=8;
+ ctx.textAlign='center';ctx.textBaseline='middle';ctx.shadowColor='rgba(0,0,0,'+(clip.textShadow??.9)+')';ctx.shadowBlur=8;
+ ctx.strokeStyle=clip.textOutlineColor||'#000000';ctx.lineWidth=(clip.textOutlineWidth||0)*width/1280;ctx.lineJoin='round';
  const lineHeight=Math.max(18,size*1.3),offset=(lines.length-1)*lineHeight/2;
  const y=risingTextPosition(clip,time)/100*height;
- for(let i=0;i<lines.length;i++)ctx.fillText(lines[i],width/2,y-offset+i*lineHeight,width*.92);
+ for(let i=0;i<lines.length;i++){if(ctx.lineWidth)ctx.strokeText(lines[i],width/2,y-offset+i*lineHeight,width*.92);ctx.fillText(lines[i],width/2,y-offset+i*lineHeight,width*.92)}
  ctx.restore();
 }
-async function paintFrame(ctx,clips,assetsById,nodes,time,width,height){
+async function paintFrame(ctx,clips,assetsById,nodes,time,width,height,chromaCaches){
  ctx.save();ctx.fillStyle='#000000';ctx.fillRect(0,0,width,height);
  for(const original of activeClips(clips,time)){
   if(original.kind==='audio'||original.trackId.startsWith('A'))continue;
@@ -163,9 +165,15 @@ async function paintFrame(ctx,clips,assetsById,nodes,time,width,height){
   ctx.translate(width*(clip.offsetX||0)/100,height*(clip.offsetY||0)/100);
   ctx.rotate((clip.rotation||0)*Math.PI/180);
   ctx.scale(clip.scale||1,clip.scale||1);ctx.translate(-width/2,-height/2);
-  ctx.filter='brightness('+(clip.brightness??1)+') contrast('+(clip.contrast??1)+') saturate('+(clip.saturation??1)+')';
+  ctx.filter='brightness('+(clip.brightness??1)+') contrast('+(clip.contrast??1)+') saturate('+(clip.saturation??1)+') hue-rotate('+(clip.hueRotate??0)+'deg) blur('+(clip.blur??0)+'px)';
   if(clip.kind==='text')drawCaption(ctx,clip,width,height,time);
-  else if(node)fitImage(ctx,node,width,height);
+  else if(node){
+   if(clip.chromaKey){
+    let cache=chromaCaches.get(clip.id);
+    if(!cache){const canvas=document.createElement('canvas');cache={canvas,context:canvas.getContext('2d',{willReadFrequently:true})};chromaCaches.set(clip.id,cache)}
+    renderKeyedImage(ctx,node,clip,width,height,cache)
+   }else fitImage(ctx,node,width,height);
+  }
   ctx.restore();
  }
  ctx.restore();
@@ -216,11 +224,11 @@ export async function captureVisualReview({assets,clips,settings}){
  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
  const ctx=canvas.getContext('2d',{alpha:false});
  if(!ctx)throw Error('Canvas preview inspection is unavailable in this browser.');
- const nodes=new Map(),assetsById=new Map(assets.map(a=>[a.id,a]));
+ const nodes=new Map(),chromaCaches=new Map(),assetsById=new Map(assets.map(a=>[a.id,a]));
  const frames=[],notes=reviewTimelineNotes(clips,assets);
  try{
   for(const t of times){
-   await paintFrame(ctx,clips,assetsById,nodes,t,width,height);
+   await paintFrame(ctx,clips,assetsById,nodes,t,width,height,chromaCaches);
    let data='',quality=.74;
    do{
     data=canvas.toDataURL('image/jpeg',quality).split(',')[1]||'';
