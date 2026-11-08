@@ -31,7 +31,7 @@ export async function loadBrowserProject(){
   await settled;
   return {...p,assets:p.assets.map((a,i)=>{
    const blob=files[i]||null;
-   return {...a,file:blob,url:blob?URL.createObjectURL(blob):'',missing:!blob};
+   return {...a,file:blob,url:blob?URL.createObjectURL(blob):'',missing:!blob&&a.kind!=='text'};
   })};
  }finally{db.close()}
 }
