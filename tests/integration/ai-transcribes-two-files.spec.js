@@ -78,3 +78,49 @@ test('MCP queues two specific imported files and the browser returns isolated ti
  const disconnected=await page.context().request.delete('/api/bridge/session',{headers:{Authorization:'Bearer '+token}});
  expect(disconnected.ok()).toBe(true);
 });
+
+
+test('Existing ChatGPT connector with no-argument schema transcribes the only imported video',async({page,request})=>{
+ await page.addInitScript(()=>{
+  const RealWorker=window.Worker;
+  window.Worker=class{
+   constructor(url,opts){if(!String(url).includes('transcription.worker'))return new RealWorker(url,opts);this.onmessage=null;}
+   postMessage(){setTimeout(()=>this.onmessage?.({data:{type:'complete',result:{
+    text:'This is the strongest line.',segments:[{start:0.2,end:0.9,text:'This is the strongest line.'}]
+   }}}),20)}
+   terminate(){}
+  };
+ });
+ await page.goto('/__integration/login');
+ await expect(page.locator('.ve-shell')).toBeVisible();
+ await page.locator('input[accept="video/*,audio/*,image/*"]').setInputFiles({
+  name:'only-interview.wav',mimeType:'audio/wav',buffer:wav(1.5)
+ });
+ await expect(page.locator('.ve-media-item')).toHaveCount(1);
+ await page.locator('.ve-side-tabs button[title="Connect"]').click();
+ const sessionResponse=page.waitForResponse(r=>r.url().endsWith('/api/bridge/session')&&r.request().method()==='POST');
+ await page.getByRole('button',{name:'Connect AI editing bridge'}).click();
+ const {token}=await (await sessionResponse).json();
+ await expect(page.getByText('Browser synced and ready')).toBeVisible();
+ const rpc=async(name,args,id)=>{
+  const res=await request.post('/api/bridge/mcp',{
+   headers:{Authorization:'Bearer '+token},
+   data:{jsonrpc:'2.0',id,method:'tools/call',params:{name,arguments:args||{}}}
+  });
+  expect(res.status()).toBe(200);
+  const body=await res.json();
+  const data=JSON.parse(body.result.content[0].text);
+  if(body.result.isError)throw Error(data.error);
+  return data;
+ };
+ const project=await rpc('get_editor_project',{},1);
+ expect(project.project.assets).toHaveLength(1);
+ // This is the EXACT call shape used by existing ChatGPT plugin installations.
+ const queued=await rpc('queue_transcription',{},2);
+ expect(queued.asset_id).toBe(project.project.assets[0].id);
+ await expect.poll(async()=>(await rpc('get_transcription',{job_id:queued.job_id},3)).status,{timeout:20000,intervals:[600,1000,1500]}).toBe('complete');
+ const transcript=await rpc('get_transcription',{job_id:queued.job_id},4);
+ expect(transcript.result[0].text).toBe('This is the strongest line.');
+ const disconnected=await page.context().request.delete('/api/bridge/session',{headers:{Authorization:'Bearer '+token}});
+ expect(disconnected.ok()).toBe(true);
+});
