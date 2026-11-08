@@ -14,7 +14,7 @@ export const timelineDuration=clips=>Math.max(0,...clips.map(clipEnd));
 export const trackFor=id=>TRACKS.find(x=>x.id===id)||(/^V[0-9]+$/.test(id)?{id,kind:'video',z:Number(id.slice(1))*10}: /^A[0-9]+$/.test(id)?{id,kind:'audio',z:0}:null);
 export const accepts=(asset,track)=> {
  const k=trackFor(track)?.kind;
- return Boolean(k&&(k==='text'?asset?.kind==='text':k==='audio'?asset?.kind==='audio'||asset?.kind==='video':asset?.kind!=='audio'&&asset?.kind!=='text'));
+ return Boolean(k&&(k==='text'?['text','motion'].includes(asset?.kind):k==='audio'?['audio','video','motion'].includes(asset?.kind):asset?.kind!=='audio'&&asset?.kind!=='text'));
 };
 export function newClip(asset,trackId,start=0,id='clip-'+Math.random().toString(36).slice(2)){
  const length=asset?.kind==='image'?5:Math.max(.1,Number(asset?.duration)||5);
@@ -53,7 +53,7 @@ export function placeClip(clips,id,trackId,start,magnet=.16){
  return clips.map(c=>c.id===id?{...c,trackId,start:snapTime(start,clips,id,magnet)}:c);
 }
 export function activeClips(clips,time){
- return clips.filter(c=>time>=c.start-.001&&time<clipEnd(c)-.001)
+ return clips.filter(c=>c.kind!=='motion'&&time>=c.start-.001&&time<clipEnd(c)-.001)
  .sort((a,b)=>(trackFor(a.trackId)?.z||0)-(trackFor(b.trackId)?.z||0)||a.start-b.start);
 }
 export function transitionProgress(c,time){
@@ -69,7 +69,7 @@ export function addTransition(clips,id,type,duration){
  const current=clips.find(c=>c.id===id);if(!current)return clips;
  const d=Math.max(.1,Math.min(2,Number(duration)||.7,clipLength(current)/2));
  if(type==='none')return clips.map(c=>c.id===id?{...c,transitionIn:'none'}:c);
- const previous=clips.filter(c=>c.id!==id&&c.trackId===current.trackId&&clipEnd(c)<=current.start+.1)
+ const previous=clips.filter(c=>c.id!==id&&c.kind!=='motion'&&c.trackId===current.trackId&&clipEnd(c)<=current.start+.1)
  .sort((a,b)=>clipEnd(b)-clipEnd(a))[0];
  const adjacent=previous&&Math.abs(clipEnd(previous)-current.start)<.2;
  const start=adjacent&&type!=='fade'?Math.max(previous.start+.05,current.start-d):current.start;
