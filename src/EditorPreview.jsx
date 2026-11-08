@@ -30,7 +30,7 @@ function selectionGeometry(c,size){
 }
 export default function EditorPreview({
  assets,clips,time,playing,onSelect,selectedId,aspect='16:9',trackMuted={},
- onTransformStart,onTransform,onTransformEnd
+ onTransformStart,onTransform,onTransformEnd,viewZoom=70
 }){
  const nodes=useRef(new Map()),stage=useRef(null),gesture=useRef(null);
  const [size,setSize]=useState({w:720,h:405});
@@ -89,8 +89,9 @@ export default function EditorPreview({
  const frameStyle=aspect==='9:16'?{aspectRatio:'9 / 16',maxWidth:'min(100%, 270px)'}
   :aspect==='1:1'?{aspectRatio:'1 / 1',maxWidth:'min(100%, 480px)'}:{aspectRatio:'16 / 9'};
  const guide=selected&&selectionGeometry(selected,size);
+ const offscreen=guide&&(guide.left<0||guide.left>100||guide.top<0||guide.top>100);
  return <div className="ve-stage-pasteboard">
-  <div ref={stage} className="ve-stage-frame" data-aspect={aspect} style={frameStyle}>
+  <div ref={stage} className="ve-stage-frame" data-aspect={aspect} style={{...frameStyle,width:Math.max(30,Math.min(95,viewZoom))+'%'}}>
    <div className="ve-stage-art">
     <div className="ve-stage-checker"><span>PROGRAM FRAME · {aspect}</span></div>
     {visible.map(clip=>{
@@ -117,6 +118,12 @@ export default function EditorPreview({
     })}
     {!visible.some(c=>c.kind!=='audio'&&!c.trackId.startsWith('A'))&&<div className="ve-empty-stage">{clips.length?'No visual clips at this time':'Drag videos onto the timeline to start editing'}</div>}
    </div>
+   {offscreen&&<div className="ve-offscreen-indicator" role="status"
+     style={{left:clamp(guide.left,7,93)+'%',top:clamp(guide.top,7,93)+'%'}}
+     title="The selected object is outside the export frame. Drag it or zoom out to see the full bounds."
+     onPointerDown={e=>begin(e,selected)} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd}>
+      ◇ Off-canvas · drag here
+    </div>}
    {guide&&<div className="ve-object-outline" data-clip-id={selected.id} style={{
      left:guide.left+'%',top:guide.top+'%',width:guide.width,height:guide.height,
      transform:'translate(-50%,-50%) rotate('+guide.rotation+'deg)'
