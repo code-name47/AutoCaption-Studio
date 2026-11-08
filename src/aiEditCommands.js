@@ -184,7 +184,7 @@ export function applyEditorAction(project,action){
    assert(c.kind==='text','Text property applies only to text clips');
   if(['audioChannel','pan','eqLow','eqMid','eqHigh'].includes(property))
    assert(['video','audio'].includes(c.kind),'Audio controls require audio/video media');
-  if(['chromaKey','chromaColor','chromaTolerance','chromaSoftness'].includes(property))
+  if(['chromaKey','chromaColor','chromaTolerance','chromaSoftness','cropLeft','cropRight','cropTop','cropBottom'].includes(property))
    assert(['video','image'].includes(c.kind)&&!c.trackId.startsWith('A'),'Chroma key requires a visual clip');
   updated=copy(p,{clips:p.clips.map(x=>x.id===c.id?{...x,[property]:a.value}:x)});
   description='Set '+property+' of '+c.id+' to '+a.value;focus=c.start;selectedId=c.id;break;
