@@ -126,3 +126,44 @@ body.ve-app-mode,body.ve-app-mode #root{height:100dvh;min-height:0;margin:0;over
 @media(max-width:1150px){.ve-main{grid-template-columns:minmax(240px,270px) minmax(0,1fr) minmax(220px,250px) 14px}.ve-logo{font-size:10px}.ve-project-name{max-width:130px}.ve-top-state{display:none}}
 @media(max-width:900px){.ve-main{grid-template-columns:240px minmax(0,1fr) 14px}.ve-inspector{display:none}.ve-topbar{gap:6px;padding:0 7px}.ve-top-actions{gap:3px}.ve-top-actions button{padding:6px}.ve-left{grid-template-columns:48px 1fr}.ve-side-tabs button small{display:none}.ve-side-tabs button{min-height:44px}.ve-project-name{max-width:120px}}
 @media(max-width:600px){.ve-main{grid-template-columns:1fr;grid-template-rows:minmax(110px,1fr) minmax(130px,1fr)}.ve-left{grid-row:2;grid-column:1;grid-template-columns:48px 1fr}.ve-monitor-panel{grid-row:1;grid-column:1}.ve-inspector-toggle{display:none}.ve-logo small,.ve-top-separator{display:none}.ve-logo{letter-spacing:0;font-size:10px}.ve-project-name{display:none}.ve-top-actions a{display:none}.ve-timeline{flex-basis:260px}.ve-timeline-tools{gap:4px;padding:3px}.ve-timeline-tools button{font-size:9px;padding:4px}.ve-timeline-tools input[type=range]{width:60px}}
+
+/* Direct-manipulation stage, with a defined export frame and editing pasteboard. */
+.ve-monitor-area{overflow:hidden;padding:10px 16px;position:relative}
+.ve-stage-pasteboard{width:100%;height:100%;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;
+ background:radial-gradient(circle at center,#1a2537 0%,#0c1523 65%,#090f19 100%)}
+.ve-stage-pasteboard>.ve-stage-frame{width:78%;max-height:83%;overflow:visible;border:2px solid #f1f4ff;box-shadow:0 0 0 1px #000,0 10px 38px #000b;background:#04070f}
+.ve-stage-art{position:absolute;inset:0;overflow:hidden;background:#050810}
+.ve-stage-art .ve-stage-layer,.ve-stage-art .ve-stage-text{touch-action:none;user-select:none}
+.ve-stage-art .ve-stage-text{z-index:52!important;cursor:grab}
+.ve-stage-art .ve-stage-layer{cursor:grab}
+.ve-stage-art .ve-stage-layer:active,.ve-stage-art .ve-stage-text:active{cursor:grabbing}
+.ve-object-outline{position:absolute;z-index:100;box-sizing:border-box;border:1px dashed #fff9;
+ box-shadow:0 0 0 1px #070e1d90,0 0 12px #ffffff36;touch-action:none;cursor:move;user-select:none}
+.ve-object-outline:active{cursor:grabbing}
+.ve-object-label{position:absolute;bottom:100%;left:0;max-width:210px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+ font:10px/1.2 Segoe UI,Arial,sans-serif;background:#eaf0ff;color:#1d2846;padding:3px 6px;border-radius:4px 4px 0 0}
+.ve-corner{position:absolute;width:11px;height:11px;border:1px solid #181f36;background:#f9fcff;border-radius:2px;cursor:nwse-resize;touch-action:none}
+.ve-corner-nw{top:-6px;left:-6px}.ve-corner-ne{top:-6px;right:-6px;cursor:nesw-resize}
+.ve-corner-sw{bottom:-6px;left:-6px;cursor:nesw-resize}.ve-corner-se{bottom:-6px;right:-6px}
+.ve-frame-status{position:absolute;right:10px;bottom:7px;font-size:10px;color:#8da1bd;text-align:right;pointer-events:none}
+.ve-range>span{align-items:center;gap:5px}
+.ve-range>span input[type=number]{width:74px;min-width:0;background:#0b1526;border:1px solid #43536a;color:#eef4ff;
+ border-radius:5px;padding:2px 4px;text-align:right;font-variant-numeric:tabular-nums;font-size:11px}
+.ve-range>span input[type=number]:focus{outline:1px solid #9292ff}
+.ve-clip.ve-motion{background:repeating-linear-gradient(135deg,#7752a4,#7752a4 7px,#643a91 7px,#643a91 15px);border-color:#c29af1}
+.ve-overlap-marker{position:absolute;top:4px;height:50px;border:1px solid #66c9ffcf;background:repeating-linear-gradient(45deg,#2d9ce790,#2d9ce790 6px,#2078bb78 6px,#2078bb78 12px);
+ border-radius:6px;z-index:14;pointer-events:auto;cursor:pointer;color:#effaff;font-size:11px;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 5px #0009}
+.ve-overlap-marker:hover{filter:brightness(1.3)}
+.ve-track-label{gap:4px}
+.ve-track-record{background:#1b2942!important;border:1px solid #415471!important;color:#ff9299!important;font-weight:900;min-width:22px!important;min-height:23px}
+.ve-track-record[aria-pressed=true]{background:#a12c41!important;color:#fff!important;border-color:#ff828d!important;box-shadow:0 0 9px #f66a7d88;animation:ve-rec-pulse 1.4s infinite}
+@keyframes ve-rec-pulse{50%{box-shadow:0 0 12px #f66a7d}}
+.ve-timeline-context{position:fixed;z-index:99999;min-width:185px;background:#141e30;color:#eff4ff;
+ border:1px solid #4b5b77;border-radius:9px;box-shadow:0 10px 35px #000c;padding:5px;display:flex;flex-direction:column;gap:2px}
+.ve-timeline-context button{display:block;border:0;border-radius:5px;background:transparent!important;color:#e7edff;text-align:left;padding:8px 10px;width:100%;font-size:12px}
+.ve-timeline-context button:hover{background:#394968!important}
+.ve-timeline-context hr{width:100%;margin:3px 0;border:0;border-top:1px solid #39455d}
+.ve-recording-banner{border:1px solid #e46875;padding:4px 9px;border-radius:7px;background:#592738;color:#ffe3e7;font-size:11px;white-space:nowrap}
+.ve-monitor-aspect{display:flex;gap:4px;align-items:center}
+.ve-monitor-aspect button{padding:4px 8px;font-size:11px}
+.ve-monitor-aspect button[aria-pressed=true]{background:#535da0;border-color:#949bff;color:#fff}
