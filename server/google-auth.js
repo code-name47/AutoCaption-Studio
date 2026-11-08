@@ -54,6 +54,25 @@ router.get('/me',(req,res)=>{const a=current(req);return res.set('Cache-Control'
 // Only expose this token to the signed-in first-party page; never persist it client-side.
 function sameOrigin(req,res,next){const origin=req.get('Origin');if(origin&&origin!==new URL(redirect()).origin)return res.status(403).json({error:'Invalid origin'});next()}
 router.get('/picker-config',sameOrigin,(req,res)=>{const a=current(req);if(!a)return res.status(401).json({error:'Connect Google first'});if(!process.env.GOOGLE_PICKER_API_KEY)return res.status(503).json({error:'GOOGLE_PICKER_API_KEY is missing in Render'});res.set('Cache-Control','no-store').json({accessToken:a.accessToken,apiKey:process.env.GOOGLE_PICKER_API_KEY,appId:process.env.GOOGLE_CLOUD_PROJECT_NUMBER||''})});
+// Folder access is limited to files authorized for this app under drive.file.
+// A picked folder does not automatically grant access to every existing child.
+router.get('/folder/:id/files',sameOrigin,requireGoogleAccount,async(req,res)=>{
+ const folderId=req.params.id;
+ if(!/^[a-zA-Z0-9_-]{10,160}$/.test(folderId))return res.status(400).json({error:'Invalid folder ID'});
+ try{
+  const params=new URLSearchParams({q:"'"+folderId+"' in parents and trashed = false",fields:'nextPageToken,files(id,name,mimeType,size)',page_size:'100'});
+  const files=[];let pageToken='';
+  for(let page=0;page<5;page++){
+   if(pageToken)params.set('pageToken',pageToken);else params.delete('pageToken');
+   const response=await fetch('https://www.googleapis.com/drive/v3/files?'+params,{headers:{Authorization:'Bearer '+req.googleAccount.accessToken},signal:AbortSignal.timeout(15000)});
+   if(!response.ok)return res.status(response.status===401||response.status===403?403:502).json({error:'Google Drive cannot list this folder with current permissions. The drive.file scope may not grant access to all existing videos.'});
+   const data=await response.json();
+   files.push(...(data.files||[]).filter(f=>/^(video|audio)\\//.test(f.mimeType||'')).map(f=>({id:f.id,name:f.name,mimeType:f.mimeType,size:Number(f.size||0)})));
+   pageToken=data.nextPageToken||'';if(!pageToken)break;
+  }
+  return res.set('Cache-Control','no-store').json({files,partial:Boolean(pageToken),permissionNote:'Google drive.file access may only show files individually authorized for AutoCaption Studio.'});
+ }catch{return res.status(502).json({error:'Could not list Google Drive folder'})}
+});
 router.get('/file/:id',sameOrigin,async(req,res)=>{
  const a=current(req);if(!a)return res.status(401).json({error:'Connect Google first'});
  const fileId=req.params.id;
