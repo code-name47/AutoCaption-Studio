@@ -367,7 +367,7 @@ export default function EditorWorkspace(){
  const trackMute=t=>setTrackMuted(m=>({...m,[t]:!m[t]}));
  const aiProject=useMemo(()=>editorProjectSnapshot({name,assets,clips,settings,tracks}),[name,assets,clips,settings,tracks]);
  const ai=useLiveAIEditor({
-  token:bridgeToken,project:aiProject,
+  token:bridgeToken,project:aiProject,canApply:!busy&&!rendering&&!recordingTrackId,
   onStart:()=>{setPlaying(false);setSourceViewer(false);record()},
   onStep:step=>{
    setClips(step.project.clips);
