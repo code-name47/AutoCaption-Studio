@@ -67,7 +67,7 @@ router.get('/folder/:id/files',sameOrigin,requireGoogleAccount,async(req,res)=>{
    const response=await fetch('https://www.googleapis.com/drive/v3/files?'+params,{headers:{Authorization:'Bearer '+req.googleAccount.accessToken},signal:AbortSignal.timeout(15000)});
    if(!response.ok)return res.status(response.status===401||response.status===403?403:502).json({error:'Google Drive cannot list this folder with current permissions. The drive.file scope may not grant access to all existing videos.'});
    const data=await response.json();
-   files.push(...(data.files||[]).filter(f=>/^(video|audio)\\//.test(f.mimeType||'')).map(f=>({id:f.id,name:f.name,mimeType:f.mimeType,size:Number(f.size||0)})));
+   files.push(...(data.files||[]).filter(f=>typeof f.mimeType==='string'&&(f.mimeType.startsWith('video/')||f.mimeType.startsWith('audio/'))).map(f=>({id:f.id,name:f.name,mimeType:f.mimeType,size:Number(f.size||0)})));
    pageToken=data.nextPageToken||'';if(!pageToken)break;
   }
   return res.set('Cache-Control','no-store').json({files,partial:Boolean(pageToken),permissionNote:'Google drive.file access may only show files individually authorized for AutoCaption Studio.'});
