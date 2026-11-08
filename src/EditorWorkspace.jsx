@@ -6,6 +6,9 @@ import EditorPreview from './EditorPreview.jsx';
 import EditorTimeline from './EditorTimeline.jsx';
 import EditorInspector from './EditorInspector.jsx';
 import PanelSplitter from './PanelSplitter.jsx';
+import useLiveAIEditor from './useLiveAIEditor.js';
+import AIReviewPanel from './AIReviewPanel.jsx';
+import {editorProjectSnapshot} from './aiEditCommands.js';
 import {renderProjectToWebM} from './editorExport.js';
 import {makeMediaThumbnail} from './mediaThumbnails.js';
 import {captureMotion,newMotionClip} from './editorMotion.js';
@@ -256,7 +259,7 @@ export default function EditorWorkspace(){
   })}catch(e){note(e.message)}
  }
  async function logoutGoogle(){const r=await fetch('/auth/google/logout',{method:'POST'});if(!r.ok){note('Could not disconnect Google');return}setGoogleAccount('');setBridgeToken('');note('Google disconnected. Existing loaded media remains in this local project.')}
- async function connectAI(){try{const r=await fetch('/api/bridge/session',{method:'POST'});const d=await r.json();if(!r.ok)throw Error(d.error||'Could not connect');setBridgeToken(d.token);note('Temporary AI bridge session created. External editor tools are not enabled yet.')}catch(e){note(e.message)}}
+ async function connectAI(){try{const r=await fetch('/api/bridge/session',{method:'POST'});const d=await r.json();if(!r.ok)throw Error(d.error||'Could not connect');setBridgeToken(d.token);setTab('ai');note('AI bridge connected. Approve proposed edits in this browser.');}catch(e){note(e.message)}}
  async function transcribeSelected(){
   const asset=selectedAsset||currentAsset;
   if(!asset?.file||!['video','audio'].includes(asset.kind)){note('Select a video or audio file in Project Files first.');return}
@@ -362,7 +365,26 @@ export default function EditorWorkspace(){
  const keysRef=useRef(null);keysRef.current=handleShortcut;
  useEffect(()=>{const listener=e=>keysRef.current?.(e);window.addEventListener('keydown',listener);return()=>window.removeEventListener('keydown',listener)},[]);
  const trackMute=t=>setTrackMuted(m=>({...m,[t]:!m[t]}));
- return <div className="ve-shell">
+ const aiProject=useMemo(()=>editorProjectSnapshot({name,assets,clips,settings,tracks}),[name,assets,clips,settings,tracks]);
+ const ai=useLiveAIEditor({
+  token:bridgeToken,project:aiProject,
+  onStart:()=>{setPlaying(false);setSourceViewer(false);record()},
+  onStep:step=>{
+   setClips(step.project.clips);
+   setSettings(current=>({...current,aspect:step.project.settings.aspect}));
+   setSelectedId(step.selectedId||'');
+   if(typeof step.focus==='number'){timeRef.current=step.focus;setTime(step.focus)}
+   setSourceViewer(false);
+   note('AI: '+step.description);
+  },
+  onRestore:previous=>{
+   setClips(previous.clips);
+   setSettings(current=>({...current,aspect:previous.settings.aspect}));
+   setSelectedId('');timeRef.current=0;setTime(0);
+  },
+  onNotice:note,onExpired:()=>{setBridgeToken('');note('AI bridge expired. Reconnect to continue.')}
+ });
+ return <div className={'ve-shell'+(ai.applying?' ve-ai-busy':'')}>
   <header className="ve-topbar">
    <div className="ve-logo"><span>◉</span> AUTOCAPTION <b>STUDIO</b><small>EDIT</small></div>
    <div className="ve-top-separator"/>
@@ -371,6 +393,7 @@ export default function EditorWorkspace(){
    <div className="ve-top-actions">
     <button title="Undo (Ctrl+Z)" disabled={!past.current.length} onClick={undo}>↶</button>
     <button title="Redo (Ctrl+Y)" disabled={!future.current.length} onClick={redo}>↷</button>
+    {bridgeToken&&<button className="ve-ai-top-indicator" title="Open AI editing controls" onClick={()=>setTab('ai')}>● AI {ai.applying?'editing':ai.review?'review':'linked'}</button>}
     <button title="Reset editor panel sizes" onClick={resetPanelLayout}>Reset panels</button>
     <button onClick={saveProject} disabled={busy||rendering}>Save</button>
     <button className="ve-accent-btn" onClick={()=>setTab('export')}>Export</button>
@@ -422,11 +445,19 @@ export default function EditorWorkspace(){
       <h4>Project</h4><button className="ve-wide-btn" onClick={saveProject} disabled={busy}>Save project to this browser</button><button className="ve-wide-btn" onClick={loadProject} disabled={busy}>Open saved browser project</button><p className="ve-note">Projects and source files are stored on this browser/device using IndexedDB, not in Google Drive.</p>
     </>}
     {tab==='ai'&&<><div className="ve-pane-heading"><b>Integrations</b><small>Early access</small></div>
-      <p className="ve-hint">Connect Google Drive for media import. Connecting an AI assistant to edit the timeline will require additional OAuth authorization and a secure edit-command API.</p>
+      <p className="ve-hint">Connect an AI client to propose edits. You will review them on-screen before they change the timeline. Only media names, timeline objects and canvas settings are shared; never video bytes.</p>
       {googleAccount?<><div className="ve-connected">● Google: {googleAccount}</div><button className="ve-wide-btn" onClick={importFromDrive}>Import Drive videos</button><button className="ve-wide-btn" onClick={logoutGoogle}>Disconnect Google</button></>:<a className="ve-wide-link" href="/auth/google/start">Connect Google account</a>}
-      <hr/><button className="ve-wide-btn" onClick={connectAI} disabled={!!bridgeToken}>{bridgeToken?'Temporary bridge active':'Create test MCP bridge session'}</button>
-      {bridgeToken&&<button className="ve-wide-btn" onClick={()=>navigator.clipboard.writeText(bridgeToken)}>Copy private session token</button>}
-      <p className="ve-note">The existing experimental MCP bridge supports transcription jobs only. It cannot control this editor yet. Never share a session token publicly.</p>
+      <hr/><button className="ve-wide-btn ve-accent-btn" onClick={connectAI} disabled={!!bridgeToken||!googleAccount}>{bridgeToken?'● AI editing bridge connected':'Connect AI editing bridge'}</button>
+      {bridgeToken&&<>
+       <div className="ve-ai-connected">● {ai.connected?'Browser synced and ready':'Connecting browser to AI bridge…'}</div>
+       <label className="ve-stacked-field"><span>Remote MCP endpoint</span><input readOnly aria-label="AI MCP server URL" value={window.location.origin+'/api/bridge/mcp'}/></label>
+       <button className="ve-wide-btn" onClick={()=>navigator.clipboard.writeText(window.location.origin+'/api/bridge/mcp')}>Copy MCP server URL</button>
+       <button className="ve-wide-btn" onClick={()=>navigator.clipboard.writeText(bridgeToken)}>Copy private session token</button>
+       <button className="ve-wide-btn" disabled={!ai.connected||ai.applying||!!ai.review} onClick={ai.demo}>Test live AI editing (approval required)</button>
+       <p className="ve-note">For clients supporting custom remote MCP servers and bearer authentication, use the endpoint and token above. Do not paste the token into a chat. Sessions expire in 30 minutes; leave this editor tab open.</p>
+       <button className="ve-wide-btn" onClick={async()=>{try{await fetch('/api/bridge/session',{method:'DELETE',headers:{Authorization:'Bearer '+bridgeToken}})}finally{setBridgeToken('');note('AI editing bridge disconnected')}}}>Disconnect AI bridge</button>
+      </>}
+      <p className="ve-note">AI edits never run automatically. You approve or reject each batch, then watch the timeline update. This browser connection alone does not connect the current ChatGPT chat; a compatible remote MCP connector is required.</p>
     </>}
     </div>
    </aside>
@@ -447,6 +478,8 @@ export default function EditorWorkspace(){
   </div>
   <PanelSplitter axis="horizontal" label="Resize timeline height" value={panelLayout.timeline} min={200} max={850} onResize={resizeTimeline} onReset={()=>{setTimelineExpanded(false);setPanelLayout(p=>({...p,timeline:freshPanelLayout().timeline}))}}/>
   <EditorTimeline panelHeight={panelLayout.timeline} expanded={timelineExpanded} onToggleExpanded={toggleTimelineSize} tracks={tracks} clips={clips} assets={assets} time={time} zoom={zoom} setZoom={setZoom} onSeek={seek} onSelect={id=>{setSelectedId(id);setSourceViewer(false);const item=clipsRef.current.find(c=>c.id===id);if(item&&item.kind!=='motion'&&(timeRef.current<item.start||timeRef.current>=clipEnd(item))){timeRef.current=item.start+.01;setTime(timeRef.current);setPlaying(false)}}} selectedId={selectedId} onPlace={placeAsset} onMove={moveClip} onTrim={trim} onTrimStart={record} onTransition={transition} onRemove={removeClip} onSplit={split} onDuplicate={duplicateClip} onAddTitle={trackId=>addTitle("New text",trackId,3)} onPatch={updateClip} onAddTrack={addTrack} onRemoveTrack={removeTrack} trackMuted={trackMuted} onToggleTrackMute={trackMute} recordingTrackId={recordingTrackId} onToggleRecord={toggleRecord} onOpenInspector={id=>{setSelectedId(id);setInspectorOpen(true)}}/>
+  <AIReviewPanel review={ai.review} applying={ai.applying} progress={ai.progress} recent={ai.recent} error={ai.error}
+    onApprove={ai.approve} onReject={ai.reject} onRevert={ai.revert} onDismiss={ai.dismiss}/>
   <input ref={input} type="file" multiple hidden accept="video/*,audio/*,image/*" onChange={e=>{importFiles(e.target.files);e.target.value=''}}/>
   <input ref={audioInput} type="file" multiple hidden accept="audio/*" onChange={e=>{importFiles(e.target.files);e.target.value=''}}/>
   <div className="ve-shortcuts">SPACE play/pause · S split · DEL remove · CTRL+Z undo · Drag preview to move/resize · Overlap clips to crossfade · ● Record motion</div>
