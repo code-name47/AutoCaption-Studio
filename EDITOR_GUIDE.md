@@ -56,7 +56,7 @@ This is an initial linear-interpolation motion recorder for canvas transforms, t
 - **Source limits:** maximum 150 MB per media file through the Google Drive endpoint. Browser Whisper decoding currently limits individual clips to 10 minutes.
 - **Local-only project storage:** IndexedDB saves and source media are stored in the browser/device, not Google Drive or a shared cloud account. Clearing site data may delete a saved project. Storage quotas vary.
 - **Not yet supported:** reliable MP4/H.264 export, frame-accurate rendering, keyframe graph editing, masking, chroma key, LUTs, ripple editing, motion tracking, nested sequences, background rendering, shared project collaboration, and professional color grading.
-- **AI integration:** the experimental MCP endpoint currently queues transcription jobs only. AI-driven editing requires separately authenticated and explicitly authorized editing commands. Never publish bearer tokens.
+- **AI editing integration (MVP):** the Connect panel now creates a short-lived authenticated MCP session. AI clients can inspect sanitized browser project metadata and propose validated edit batches. Each proposal appears on-screen and requires explicit approval; accepted steps update the timeline and preview live. The connection is not automatically installed as a ChatGPT plugin. See [AI_EDITOR_BRIDGE.md](AI_EDITOR_BRIDGE.md) for setup, demonstrations and security constraints. Never share bearer tokens.
 - **Google Drive permissions:** the narrow drive.file scope may not list all existing files in a folder. Use multi-select Google Picker for those files.
 
 ## Tests
