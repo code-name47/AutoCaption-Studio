@@ -1,0 +1,57 @@
+name: Live ChatGPT MCP production smoke check
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/secure-transcription-starter
+    paths:
+      - .github/workflows/live-mcp-smoke.yml
+jobs:
+  check-live-mcp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Verify Render deployment and OAuth endpoints
+        shell: bash
+        run: |
+          node --input-type=module <<'EOF'
+          const base='https://autocaption-studio-bridge.onrender.com';
+          const req=async(path,opts={})=>{
+            let error;
+            for(let attempt=0;attempt<5;attempt++){
+              try{return await fetch(base+path,{signal:AbortSignal.timeout(25000),...opts})}
+              catch(e){error=e;await new Promise(r=>setTimeout(r,2000))}
+            }
+            throw error;
+          };
+          const readJson=async(path)=>{
+            const r=await req(path);
+            if(!r.ok)throw Error(path+' returned '+r.status);
+            return r.json();
+          };
+          const health=await readJson('/api/health');
+          if(health.ok!==true)throw Error('Render backend health failed');
+          console.log('PASS: Render backend health');
+          const google=await readJson('/auth/google/status');
+          console.log('GOOGLE_OAUTH_CONFIGURED='+Boolean(google.configured));
+          console.log('GOOGLE_SESSION_CONNECTED='+Boolean(google.connected));
+          const protectedResource=await readJson('/.well-known/oauth-protected-resource');
+          if(protectedResource.resource!==base+'/api/bridge/mcp')throw Error('OAuth protected resource URL mismatch');
+          if(!protectedResource.authorization_servers.includes(base))throw Error('OAuth issuer URL mismatch');
+          console.log('PASS: protected resource discovery');
+          const oauth=await readJson('/.well-known/oauth-authorization-server');
+          if(oauth.issuer!==base||!oauth.code_challenge_methods_supported.includes('S256'))throw Error('OAuth issuer/PKCE configuration mismatch');
+          console.log('PASS: OAuth discovery, PKCE S256');
+          const noAuth=await req('/api/bridge/mcp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'initialize',id:1})});
+          if(noAuth.status!==401||!noAuth.headers.get('www-authenticate')?.includes('oauth-protected-resource'))throw Error('MCP OAuth challenge absent');
+          console.log('PASS: MCP requires authentication');
+          const registered=await req('/oauth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({redirect_uris:['https://chatgpt.com/connector_platform_oauth_redirect'],token_endpoint_auth_method:'none',grant_types:['authorization_code','refresh_token']})});
+          const body=await registered.json();
+          if(registered.status!==201||!body.client_id?.startsWith('acs_'))throw Error('OAuth dynamic client registration failed '+registered.status);
+          console.log('PASS: OAuth client registration (no credentials logged)');
+          const bogus=await req('/oauth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({redirect_uris:['https://attacker.example/receive'],token_endpoint_auth_method:'none'})});
+          if(bogus.status!==400)throw Error('OAuth registration accepted an unauthorized redirect');
+          console.log('PASS: untrusted OAuth redirects rejected');
+          if(!google.configured)console.log('BLOCKER: Set Google OAuth credentials and redirect URI in Render before user can authorize ChatGPT.');
+          else console.log('READY: The user may authorize ChatGPT with Google after creating their custom MCP plugin.');
+          EOF
