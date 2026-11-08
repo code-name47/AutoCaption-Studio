@@ -1,6 +1,7 @@
 import {activeClips,clipEnd,transitionProgress,timelineDuration,trackFor} from './editorCore.js';
 import {resolvedClip,visualClipOpacity,audioClipGain,risingTextPosition} from './editorMotion.js';
 import {attachAudioGraph,audioTrackEnabled} from './editorAudio.js';
+import {renderKeyedImage} from './editorChroma.js';
 
 const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
 function supportedMime(){
@@ -33,12 +34,18 @@ function paintText(ctx,clip,width,height){
  const lines=String(clip.text||'').split('\n');
  ctx.fillStyle=clip.fontColor||'#ffffff';
  ctx.font=(clip.fontWeight||700)+' '+Math.max(.5,size)+'px '+(clip.fontFamily||'Arial');
- ctx.textAlign='center';ctx.textBaseline='middle';ctx.shadowColor='rgba(0,0,0,.88)';ctx.shadowBlur=8;
+ ctx.textAlign='center';ctx.textBaseline='middle';
+ ctx.shadowColor='rgba(0,0,0,'+(clip.textShadow??.9)+')';ctx.shadowBlur=8;
+ ctx.strokeStyle=clip.textOutlineColor||'#000000';ctx.lineWidth=(clip.textOutlineWidth||0)*width/1280;ctx.lineJoin='round';
  const lineHeight=Math.max(18,size*1.3),offset=(lines.length-1)*lineHeight/2;
- for(let i=0;i<lines.length;i++)ctx.fillText(lines[i],width/2,(clip.positionY||50)/100*height-offset+i*lineHeight,width*.92);
+ for(let i=0;i<lines.length;i++){
+  const y=(clip.positionY??50)/100*height-offset+i*lineHeight;
+  if(ctx.lineWidth>0)ctx.strokeText(lines[i],width/2,y,width*.92);
+  ctx.fillText(lines[i],width/2,y,width*.92);
+ }
  ctx.restore();
 }
-function paintClip(ctx,clip,node,time,width,height,clips){
+function paintClip(ctx,clip,node,time,width,height,clips,chromaCaches){
  const alpha=visualClipOpacity(clip,clips,time);
  if(alpha<=0)return;
  ctx.save();ctx.globalAlpha=alpha;
@@ -50,9 +57,15 @@ function paintClip(ctx,clip,node,time,width,height,clips){
  ctx.rotate((clip.rotation||0)*Math.PI/180);
  ctx.scale(clip.scale||1,clip.scale||1);
  ctx.translate(-width/2,-height/2);
- ctx.filter='brightness('+(clip.brightness??1)+') contrast('+(clip.contrast??1)+') saturate('+(clip.saturation??1)+')';
+ ctx.filter='brightness('+(clip.brightness??1)+') contrast('+(clip.contrast??1)+') saturate('+(clip.saturation??1)+') hue-rotate('+(clip.hueRotate??0)+'deg) blur('+(clip.blur??0)+'px)';
  if(clip.kind==='text')paintText(ctx,clip.transitionIn==='rise'?{...clip,positionY:risingTextPosition(clip,time)}:clip,width,height);
- else if(node&&(clip.kind==='image'||node.readyState>=2))try{fitDraw(ctx,node,width,height)}catch{}
+ else if(node&&(clip.kind==='image'||node.readyState>=2))try{
+  if(clip.chromaKey){
+   let cache=chromaCaches.get(clip.id);
+   if(!cache){const canvas=document.createElement('canvas');cache={canvas,context:canvas.getContext('2d',{willReadFrequently:true})};chromaCaches.set(clip.id,cache)}
+   renderKeyedImage(ctx,node,clip,width,height,cache);
+  }else fitDraw(ctx,node,width,height);
+ }catch(e){console.warn('Export compositing error:',e.message)}
  ctx.restore();
 }
 export async function renderProjectToWebM({assets,clips,settings={},trackMuted={},trackSolo={},onProgress=()=>{}}){
@@ -65,7 +78,7 @@ export async function renderProjectToWebM({assets,clips,settings={},trackMuted={
  const fps=clamp(Number(settings.fps)||30,15,30);
  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
  const ctx=canvas.getContext('2d',{alpha:false});if(!ctx)throw Error('Canvas rendering is unavailable.');
- const elements=new Map(),audioNodes=new Map();let audioContext=null,audioDestination=null,stream=null,recorder=null,raf=0;
+ const elements=new Map(),audioNodes=new Map(),chromaCaches=new Map();let audioContext=null,audioDestination=null,stream=null,recorder=null,raf=0;
  try{
   const playable=clips.filter(c=>c.kind==='video'||c.kind==='audio');
   for(const clip of playable){
@@ -126,7 +139,7 @@ export async function renderProjectToWebM({assets,clips,settings={},trackMuted={
      for(const clip of active){
       if(clip.kind==='audio'||clip.trackId.startsWith('A'))continue;
       const node=clip.kind==='image'?imageMap.get(clip.assetId):elements.get(clip.id);
-      paintClip(ctx,resolvedClip(clip,clips,t),node,t,width,height,clips);
+      paintClip(ctx,resolvedClip(clip,clips,t),node,t,width,height,clips,chromaCaches);
      }
      ctx.restore();
      if(now-last>250){onProgress(t/duration);last=now}
