@@ -1,7 +1,7 @@
 import React,{useMemo,useRef,useState} from 'react';
 import {clipEnd,clipLength,TRACKS} from './editorCore.js';
 const CLOCK=n=>{const m=Math.floor(n/60),s=Math.floor(n%60);return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')};
-export default function EditorTimeline({tracks=TRACKS,clips,assets,time,zoom,setZoom,onSeek,onSelect,selectedId,onPlace,onMove,onTrim,onTransition,onRemove,onAddTrack,trackMuted,onToggleTrackMute}){
+export default function EditorTimeline({tracks=TRACKS,clips,assets,time,zoom,setZoom,onSeek,onSelect,selectedId,onPlace,onMove,onTrim,onTrimStart,onTransition,onRemove,onAddTrack,trackMuted,onToggleTrackMute}){
  const [dragHint,setDragHint]=useState(''),trimRef=useRef(null),scroller=useRef(null),rulerRef=useRef(null);
  const total=Math.max(30,...clips.map(c=>clipEnd(c)+5));
  const width=Math.max(1100,total*zoom+300);
@@ -19,7 +19,7 @@ export default function EditorTimeline({tracks=TRACKS,clips,assets,time,zoom,set
   else if(clip){const offset=Number(e.dataTransfer.getData('application/x-acs-offset'))||0;onMove(clip,track.id,seconds-offset)}
   else if(transition){const target=clips.filter(c=>c.trackId===track.id).sort((a,b)=>Math.abs(a.start-seconds)-Math.abs(b.start-seconds))[0];if(target)onTransition(target.id,transition,.7)}
  };
- function beginTrim(e,clip,side){e.preventDefault();e.stopPropagation();onSelect(clip.id);trimRef.current={id:clip.id,side,x:e.clientX,original:clip};e.currentTarget.setPointerCapture(e.pointerId)}
+ function beginTrim(e,clip,side){e.preventDefault();e.stopPropagation();onSelect(clip.id);onTrimStart?.();trimRef.current={id:clip.id,side,x:e.clientX,original:clip};e.currentTarget.setPointerCapture(e.pointerId)}
  function updateTrim(e){if(!trimRef.current)return;const r=trimRef.current;onTrim(r.id,r.side,(e.clientX-r.x)/zoom,r.original)}
  function endTrim(e){trimRef.current=null;try{e.currentTarget.releasePointerCapture(e.pointerId)}catch{}}
  function seekFrom(e){const rect=rulerRef.current?.getBoundingClientRect();if(!rect)return;onSeek(Math.max(0,(e.clientX-rect.left)/zoom))}
