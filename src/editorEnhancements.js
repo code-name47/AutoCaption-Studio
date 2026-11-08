@@ -100,3 +100,14 @@ export function removeLinkedWithVideo(clips,id){
   return clips.filter(c=>c.id!==id&&c.linkedSourceId!==id);
  return clips.filter(c=>c.id!==id);
 }
+
+export function cropMargins(clip,transitionRight=0){
+ const val=key=>Math.max(0,Math.min(49,Number(clip?.[key])||0));
+ const left=val('cropLeft'),right=Math.max(val('cropRight'),transitionRight),
+  top=val('cropTop'),bottom=val('cropBottom');
+ return {left,right,top,bottom};
+}
+export function cropClipPath(clip,transitionRight=0){
+ const {left,right,top,bottom}=cropMargins(clip,transitionRight);
+ return 'inset('+top+'% '+right+'% '+bottom+'% '+left+'%)';
+}
