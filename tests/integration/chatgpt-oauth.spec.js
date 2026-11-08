@@ -38,7 +38,7 @@ test('ChatGPT-style OAuth pairing controls only the matching Google-owned browse
  const approval=await api.post(HOST+'/oauth/authorize',{
   form:{request_id:requestId,decision:'approve'},maxRedirects:0,failOnStatusCode:false
  });
- expect(approval.status()).toBe(302);
+ expect(approval.status()).toBe(303);
  const redirectLocation=approval.headers()['location'];
  expect(redirectLocation).toContain('connector_platform_oauth_redirect');
  const cb=new URL(redirectLocation);
