@@ -5,9 +5,9 @@ const WAIT_BETWEEN_STEPS=550;
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
 /** A visible, approval-gated local editing agent that polls only its own bridge session. */
-export default function useLiveAIEditor({token,project,onStart,onStep,onRestore,onNotice,onExpired}){
- const context=useRef({project,onStart,onStep,onRestore,onNotice,onExpired});
- context.current={project,onStart,onStep,onRestore,onNotice,onExpired};
+export default function useLiveAIEditor({token,project,onStart,onStep,onRestore,onNotice,onExpired,canApply=true}){
+ const context=useRef({project,onStart,onStep,onRestore,onNotice,onExpired,canApply});
+ context.current={project,onStart,onStep,onRestore,onNotice,onExpired,canApply};
  const [review,setReview]=useState(null),[applying,setApplying]=useState(false);
  const [progress,setProgress]=useState(null),[error,setError]=useState('');
  const [recent,setRecent]=useState(null),[connected,setConnected]=useState(false);
@@ -64,6 +64,7 @@ export default function useLiveAIEditor({token,project,onStart,onStep,onRestore,
  const approve=useCallback(async()=>{
   const pending=reviewRef.current;
   if(!pending||busyRef.current)return;
+  if(!context.current.canApply){setError('Finish recording, importing, or exporting before approving AI edits.');return}
   busyRef.current=true;setApplying(true);setError('');setProgress({index:0,total:pending.actions.length,description:'Confirming project version'});
   const original=context.current.project;
   let claimed=false,done=0;
@@ -91,6 +92,8 @@ export default function useLiveAIEditor({token,project,onStart,onStep,onRestore,
    await request('/editor/edits/'+encodeURIComponent(pending.id)+'/progress',{
     method:'POST',body:JSON.stringify({status:'complete',progress:done})
    });
+   // The busy guard prevents per-frame uploads. Publish the final state explicitly.
+   await request('/editor/snapshot',{method:'POST',body:JSON.stringify({project:current})});
    setRecent({id:pending.id,summary:pending.summary,before:original,after:current});
    setProgress({index:done,total:done,description:'All edits applied'});
    setReview(null);context.current.onNotice?.('AI edit applied. Review the timeline, then save the project.');
