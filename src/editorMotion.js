@@ -57,7 +57,7 @@ export function animationFor(clip,clips,time){
    ||tracks.filter(c=>!clips.some(m=>m.id===c.targetClipId&&m.trackId===c.trackId&&time>=m.start&&time<clipEnd(m)))
         .sort((a,b)=>b.start-a.start)[0];
  if(!motion)return null;
- return animateAt(motion.keyframes,time-motion.start);
+ return animateAt(motion.keyframes,motion.inPoint+(time-motion.start)*(motion.speed||1));
 }
 export function resolvedClip(clip,clips,time){
  if(clip.kind==='motion')return clip;
