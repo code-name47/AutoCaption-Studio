@@ -32,8 +32,14 @@ export default function EditorPreview({
  assets,clips,time,playing,onSelect,selectedId,aspect='16:9',trackMuted={},
  onTransformStart,onTransform,onTransformEnd,viewZoom=70
 }){
- const nodes=useRef(new Map()),stage=useRef(null),gesture=useRef(null);
- const [size,setSize]=useState({w:720,h:405});
+ const nodes=useRef(new Map()),stage=useRef(null),pasteboard=useRef(null),gesture=useRef(null);
+ const [size,setSize]=useState({w:720,h:405}),[available,setAvailable]=useState({w:900,h:500});
+ useEffect(()=>{
+  if(!pasteboard.current)return;
+  const measure=()=>{const r=pasteboard.current?.getBoundingClientRect();if(r?.width&&r?.height)setAvailable({w:r.width,h:r.height})};
+  measure();if(typeof ResizeObserver==='undefined')return;
+  const observer=new ResizeObserver(measure);observer.observe(pasteboard.current);return()=>observer.disconnect();
+ },[]);
  useEffect(()=>{
   if(!stage.current)return;
   const measure=()=>{const r=stage.current?.getBoundingClientRect();if(r&&r.width&&r.height)setSize({w:r.width,h:r.height})};
@@ -88,12 +94,14 @@ export default function EditorPreview({
   gesture.current=null;try{e.currentTarget.releasePointerCapture(e.pointerId)}catch{}
  }
  const selected=visible.find(c=>c.id===selectedId&&c.kind!=='audio'&&!c.trackId.startsWith('A'));
- const frameStyle=aspect==='9:16'?{aspectRatio:'9 / 16',maxWidth:'min(100%, 270px)'}
-  :aspect==='1:1'?{aspectRatio:'1 / 1',maxWidth:'min(100%, 480px)'}:{aspectRatio:'16 / 9'};
+ const ratio=aspect==='9:16'?9/16:aspect==='1:1'?1:16/9;
+ const fitWidth=Math.min(available.w*.92,available.h*.84*ratio);
+ const frameWidth=Math.max(60,fitWidth*clamp(viewZoom/100,.3,.95));
+ const frameStyle={width:frameWidth+'px',height:(frameWidth/ratio)+'px',aspectRatio:String(ratio),maxHeight:'none',maxWidth:'none'};
  const guide=selected&&selectionGeometry(selected,size);
  const offscreen=guide&&(guide.left<0||guide.left>100||guide.top<0||guide.top>100);
- return <div className="ve-stage-pasteboard">
-  <div ref={stage} className="ve-stage-frame" data-aspect={aspect} style={{...frameStyle,width:Math.max(30,Math.min(95,viewZoom))+'%'}}>
+ return <div className="ve-stage-pasteboard" ref={pasteboard}>
+  <div ref={stage} className="ve-stage-frame" data-aspect={aspect} style={frameStyle}>
    <div className="ve-stage-art">
     <div className="ve-stage-checker"><span>PROGRAM FRAME · {aspect}</span></div>
     {visible.map(clip=>{
