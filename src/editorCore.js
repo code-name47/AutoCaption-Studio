@@ -11,7 +11,7 @@ export const TRACKS=[
 export const clipLength=c=>Math.max(0.05,((Number(c.outPoint)||0)-(Number(c.inPoint)||0))/Math.max(.1,Number(c.speed)||1));
 export const clipEnd=c=>(Number(c.start)||0)+clipLength(c);
 export const timelineDuration=clips=>Math.max(0,...clips.map(clipEnd));
-export const trackFor=id=>TRACKS.find(x=>x.id===id);
+export const trackFor=id=>TRACKS.find(x=>x.id===id)||(/^V[0-9]+$/.test(id)?{id,kind:'video',z:Number(id.slice(1))*10}: /^A[0-9]+$/.test(id)?{id,kind:'audio',z:0}:null);
 export const accepts=(asset,track)=> {
  const k=trackFor(track)?.kind;
  return Boolean(k&&(k==='text'?asset?.kind==='text':k==='audio'?asset?.kind==='audio'||asset?.kind==='video':asset?.kind!=='audio'&&asset?.kind!=='text'));
