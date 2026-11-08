@@ -40,11 +40,59 @@ function find(req,res,next){
  if(!bridgeAccessAllowed(session,account))return res.status(403).json({error:'Bridge session does not belong to this signed-in user'});
  req.bridge=session;next();
 }
+const TRANSCRIPTION_MODELS=new Set(['tiny','base','small']);
+function queueTranscription(session,args){
+ const snapshot=visibleEditorSnapshot(session);
+ if(!snapshot.connected)throw Error('Connect the browser editor before requesting transcription');
+ const assetId=args?.asset_id;
+ if(typeof assetId!=='string'||assetId.length>150)throw Error('Choose a valid asset_id from get_editor_project');
+ const asset=snapshot.project.assets.find(a=>a.id===assetId);
+ if(!asset||!['video','audio'].includes(asset.kind))throw Error('Transcription asset must be an imported video or audio file');
+ if(!Number.isFinite(asset.duration)||asset.duration<=0||asset.duration>600)throw Error('Transcription supports media under 10 minutes');
+ const model=args?.model??'base';
+ if(!TRANSCRIPTION_MODELS.has(model))throw Error('Model must be tiny, base, or small');
+ const existing=[...session.jobs.values()].find(j=>j.asset_id===assetId&&j.model===model&&j.status!=='failed');
+ if(existing)return existing;
+ if(session.jobs.size>=10)throw Error('Session job limit reached');
+ const job={id:id(),action:'transcribe',asset_id:assetId,asset_name:asset.name,model,
+  status:'queued',createdAt:now(),result:null};
+ session.jobs.set(job.id,job);
+ return job;
+}
+function finishTranscription(job,body){
+ if(job.status!=='processing')throw Error('Job must be claimed by the connected browser before completion');
+ if(typeof body?.error==='string'&&body.error.length){
+  job.status='failed';job.error=body.error.slice(0,300);return;
+ }
+ const segments=body?.segments;
+ if(!Array.isArray(segments)||segments.length>500||JSON.stringify(segments).length>120000||
+  segments.some(s=>!s||!Number.isFinite(s.start)||!Number.isFinite(s.end)||
+   s.start<0||s.end<s.start||s.end>601||typeof s.text!=='string'||s.text.length>1000))
+  throw Error('Invalid transcription segments');
+ job.result=segments.map(s=>({start:s.start,end:s.end,text:s.text}));
+ job.status='complete';
+}
 const sessionLimiter=rateLimit({windowMs:15*60*1000,limit:8,standardHeaders:'draft-7',legacyHeaders:false,message:{error:'Too many bridge sessions; retry later'}});
 router.post('/session',sessionLimiter,requireGoogleAccount,(req,res)=>{if(sessions.size>=MAX_SESSIONS)return res.status(503).json({error:'Bridge capacity reached; retry later'});const token=id();sessions.set(hash(token),{ownerId:req.googleAccount.userId,loginId:req.googleAccount.loginId,expires:now()+TTL,jobs:new Map()});res.set('Cache-Control','no-store').json({token,expiresInSeconds:TTL/1000})});
-router.get('/jobs',find,(req,res)=>{res.set('Cache-Control','no-store').json({jobs:[...req.bridge.jobs.values()].filter(j=>j.status==='queued').map(({id,action,createdAt})=>({id,action,createdAt}))})});
-router.post('/jobs',find,(req,res)=>{const action=req.body?.action;if(action!=='transcribe')return res.status(400).json({error:'Unsupported action'});if(req.bridge.jobs.size>=10)return res.status(429).json({error:'Job limit reached'});const job={id:id(),action,status:'queued',createdAt:now(),result:null};req.bridge.jobs.set(job.id,job);res.status(201).json({id:job.id,status:job.status})});
-router.post('/jobs/:id/result',find,(req,res)=>{const job=req.bridge.jobs.get(req.params.id);if(!job)return res.status(404).json({error:'Job not found'});if(job.status!=='queued')return res.status(409).json({error:'Job already completed'});const segments=req.body?.segments;if(!Array.isArray(segments)||segments.length>5000||JSON.stringify(segments).length>1000000||segments.some(s=>!s||!Number.isFinite(Number(s.start))||!Number.isFinite(Number(s.end))||Number(s.start)<0||Number(s.end)<Number(s.start)||typeof s.text!=='string'))return res.status(400).json({error:'Invalid transcript'});job.result=segments.map(s=>({start:Number(s.start),end:Number(s.end),text:String(s.text||'').slice(0,1000)}));job.status='complete';res.json({ok:true})});
+router.get('/jobs',find,(req,res)=>{res.set('Cache-Control','no-store').json({jobs:[...req.bridge.jobs.values()].filter(j=>j.status==='queued').map(({id,action,asset_id,asset_name,model,createdAt})=>({id,action,asset_id,asset_name,model,createdAt}))})});
+router.post('/jobs',find,(req,res)=>{try{
+ if(req.body?.action!=='transcribe')return res.status(400).json({error:'Unsupported action'});
+ const job=queueTranscription(req.bridge,req.body);
+ return res.status(201).json({id:job.id,status:job.status,asset_id:job.asset_id});
+}catch(e){return res.status(400).json({error:e.message})}});
+router.post('/jobs/:id/claim',find,(req,res)=>{
+ const job=req.bridge.jobs.get(req.params.id);
+ if(!job)return res.status(404).json({error:'Job not found'});
+ if(job.status!=='queued')return res.status(409).json({error:'Job already claimed or completed'});
+ job.status='processing';job.claimedAt=now();
+ return res.json({ok:true,asset_id:job.asset_id,model:job.model});
+});
+router.post('/jobs/:id/result',find,(req,res)=>{
+ const job=req.bridge.jobs.get(req.params.id);
+ if(!job)return res.status(404).json({error:'Job not found'});
+ try{finishTranscription(job,req.body);return res.json({ok:true,status:job.status})}
+ catch(e){return res.status(400).json({error:e.message})}
+});
 router.get('/jobs/:id',find,(req,res)=>{const job=req.bridge.jobs.get(req.params.id);if(!job)return res.status(404).json({error:'Job not found'});res.set('Cache-Control','no-store').json(job)});
 // The browser syncs editable project metadata into its own short-lived session.
 // AI proposals are never applied by the server; the signed-in browser must review them.
@@ -81,7 +129,7 @@ router.post('/mcp',find,(req,res)=>{
  if(body.method==='notifications/initialized')return res.status(202).end();
  if(body.method==='ping')return reply({});
  if(body.method==='tools/list')return reply({tools:[
-  {name:'queue_transcription',description:'Queue a local Whisper transcription for the media already selected in the paired AutoCaption Studio browser. Browser must remain open.',inputSchema:{type:'object',properties:{},additionalProperties:false}},
+  {name:'queue_transcription',description:'Transcribe an imported video or audio by asset_id in the paired browser using local Whisper. Choose the asset_id from get_editor_project. Results include timestamped dialogue segments for montage planning; no media bytes leave the browser. Browser must remain open.',inputSchema:{type:'object',properties:{asset_id:{type:'string'},model:{type:'string',enum:['tiny','base','small']}},required:['asset_id'],additionalProperties:false}},
   {name:'get_transcription',description:'Read the status and, when completed, the transcript of a job in this private session.',inputSchema:{type:'object',properties:{job_id:{type:'string'}},required:['job_id'],additionalProperties:false}},
   {name:'list_transcriptions',description:'List jobs for this private bridge session.',inputSchema:{type:'object',properties:{},additionalProperties:false}},
   {name:'get_editor_project',description:'Read the project metadata currently visible in the connected AutoCaption Studio editor (timeline clips, media names, track IDs, and canvas). Does not read media bytes. Browser must remain open.',inputSchema:{type:'object',properties:{},additionalProperties:false}},
@@ -99,17 +147,18 @@ router.post('/mcp',find,(req,res)=>{
  if(wantsWrite&&req.mcpIdentity&&!req.mcpIdentity.scopes.includes('editor.write'))
   return output({error:'editor.write scope is required for this action. Reconnect ChatGPT with editing permissions.'},true);
  if(name==='queue_transcription'){
-  if(req.bridge.jobs.size>=10)return output({error:'Session job limit reached'},true);
-  const job={id:id(),action:'transcribe',status:'queued',createdAt:now(),result:null};
-  req.bridge.jobs.set(job.id,job);
-  return output({job_id:job.id,status:job.status,note:'Keep the paired browser open with a video selected. Call get_transcription to check progress.'});
+  try{
+   const job=queueTranscription(req.bridge,args);
+   return output({job_id:job.id,asset_id:job.asset_id,asset_name:job.asset_name,model:job.model,
+    status:job.status,note:'Keep the paired browser open. The local Whisper worker will process this asset. Call get_transcription to check progress.'});
+  }catch(e){return output({error:e.message},true)}
  }
  if(name==='get_transcription'){
   if(typeof args.job_id!=='string')return output({error:'job_id is required'},true);
   const job=req.bridge.jobs.get(args.job_id);
   return job?output(job):output({error:'Job not found in this session'},true);
  }
- if(name==='list_transcriptions')return output({jobs:[...req.bridge.jobs.values()].map(({id,status,createdAt})=>({id,status,createdAt}))});
+ if(name==='list_transcriptions')return output({jobs:[...req.bridge.jobs.values()].map(({id,status,asset_id,asset_name,model,createdAt,error})=>({id,status,asset_id,asset_name,model,createdAt,error}))});
  if(name==='get_editor_project'){
   const data=visibleEditorSnapshot(req.bridge);
   return data.connected?output({connected:true,revision:data.revision,project:data.project}):output({error:'No active browser. Open AutoCaption Studio and connect this AI bridge to inspect the timeline.'},true);
