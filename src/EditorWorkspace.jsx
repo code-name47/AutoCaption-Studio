@@ -475,9 +475,9 @@ export default function EditorWorkspace(){
        <div className="ve-ai-connected">● {ai.connected?'Browser synced and ready':'Connecting browser to AI bridge…'}</div>
        <label className="ve-stacked-field"><span>Remote MCP endpoint</span><input readOnly aria-label="AI MCP server URL" value={window.location.origin+'/api/bridge/mcp'}/></label>
        <button className="ve-wide-btn" onClick={()=>navigator.clipboard.writeText(window.location.origin+'/api/bridge/mcp')}>Copy MCP server URL</button>
-       <button className="ve-wide-btn" onClick={()=>navigator.clipboard.writeText(bridgeToken)}>Copy private session token</button>
        <button className="ve-wide-btn" disabled={!ai.connected||ai.applying||!!ai.review} onClick={ai.demo}>Test live AI editing (approval required)</button>
-       <p className="ve-note">For clients supporting custom remote MCP servers and bearer authentication, use the endpoint and token above. Do not paste the token into a chat. Sessions expire in 30 minutes; leave this editor tab open.</p>
+       <p className="ve-note"><strong>Connect this to ChatGPT:</strong> In ChatGPT Plugins, choose + → Add custom MCP server. Enter the endpoint above, choose OAuth, and authorize with the <strong>same Google account</strong>. Install the resulting AutoCaption Studio plugin and select it in your next chat message. No session token needs to be copied into ChatGPT.</p>
+       <p className="ve-note">Keep this editor tab open. The browser editing bridge currently expires after 30 minutes, so reconnect here if editing stops.</p>
        <button className="ve-wide-btn" onClick={async()=>{try{await fetch('/api/bridge/session',{method:'DELETE',headers:{Authorization:'Bearer '+bridgeToken}})}finally{setBridgeToken('');note('AI editing bridge disconnected')}}}>Disconnect AI bridge</button>
       </>}
       <p className="ve-note">AI edits never run automatically. You approve or reject each batch, then watch the timeline update. This browser connection alone does not connect the current ChatGPT chat; a compatible remote MCP connector is required.</p>
