@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import {Router} from 'express';
 import rateLimit from 'express-rate-limit';
-import {requireGoogleAccount} from './google-auth.js';
+import {requireGoogleAccount,getGoogleAccount} from './google-auth.js';
 const router=Router();
 const sessions=new Map();
 const TTL=30*60*1000;
@@ -10,7 +10,7 @@ router.use((req,res,next)=>{res.set('Cache-Control','no-store');const site=req.g
 const id=()=>crypto.randomBytes(24).toString('base64url');
 const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
 const now=()=>Date.now();
-function find(req,res,next){const auth=req.get('Authorization')||'';const key=auth.startsWith('Bearer ')?auth.slice(7):null;const session=key&&sessions.get(hash(key));if(!session||session.expires<now()){return res.status(401).json({error:'Invalid or expired session'})}req.bridge=session;next()}
+function find(req,res,next){const auth=req.get('Authorization')||'';const key=auth.startsWith('Bearer ')?auth.slice(7):null;const session=key&&sessions.get(hash(key));if(!session||session.expires<now()){return res.status(401).json({error:'Invalid or expired session'})}if(req.path!=='/mcp'&&req.method!=='OPTIONS'){const account=getGoogleAccount(req);if(!account||account.userId!==session.ownerId)return res.status(403).json({error:'Bridge session does not belong to this signed-in user'});}req.bridge=session;next()}
 const sessionLimiter=rateLimit({windowMs:15*60*1000,limit:8,standardHeaders:'draft-7',legacyHeaders:false,message:{error:'Too many bridge sessions; retry later'}});
 router.post('/session',sessionLimiter,requireGoogleAccount,(req,res)=>{if(sessions.size>=MAX_SESSIONS)return res.status(503).json({error:'Bridge capacity reached; retry later'});const token=id();sessions.set(hash(token),{ownerId:req.googleAccount.userId,expires:now()+TTL,jobs:new Map()});res.set('Cache-Control','no-store').json({token,expiresInSeconds:TTL/1000})});
 router.get('/jobs',find,(req,res)=>{res.set('Cache-Control','no-store').json({jobs:[...req.bridge.jobs.values()].filter(j=>j.status==='queued').map(({id,action,createdAt})=>({id,action,createdAt}))})});
