@@ -33,7 +33,8 @@ test('full-screen editor can import, drag between tracks, add a title, and reope
  await expect(page.locator('.ve-clip')).toHaveCount(2);
  expect(errors).toEqual([]);
 });
-\n
+
+
 test('browser renders a short timeline to a downloadable WebM file',async({page})=>{
  await page.goto('/');
  await page.locator('input[accept="video/*,audio/*,image/*"]').setInputFiles({name:'export-fixture.png',mimeType:'image/png',buffer:png});
