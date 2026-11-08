@@ -283,6 +283,7 @@ export default function EditorWorkspace(){
     <div className="ve-left-content">
     {tab==='media'&&<><div className="ve-pane-heading"><b>Project Files</b><small>{assets.length} assets</small></div>
      <div className="ve-media-actions"><button className="ve-accent-btn" onClick={()=>input.current?.click()}>+ Import media</button><button onClick={importFromDrive} disabled={busy}>Google Drive</button></div>
+     {!googleAccount&&<a href="/auth/google/start" className="ve-connect-hint">Connect Google Drive to import cloud videos</a>}
      <p className="ve-hint">Drag a file onto a video or audio track. Click a file to preview it.</p>
      <div className="ve-media-items">{assets.length===0?<div className="ve-empty-bin">No media yet. Import videos, audio, or images to begin.</div>:assets.map(a=><div key={a.id} className={'ve-media-item '+(selectedAssetId===a.id?'selected':'')} draggable
       onDragStart={e=>{e.dataTransfer.setData('application/x-acs-asset',a.id);e.dataTransfer.effectAllowed='copyMove'}}
