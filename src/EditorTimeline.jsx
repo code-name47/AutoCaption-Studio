@@ -49,7 +49,7 @@ export default function EditorTimeline({tracks=TRACKS,clips,assets,time,zoom,set
        {clips.filter(c=>c.trackId===track.id).map(clip=>{
         const asset=assets.find(a=>a.id===clip.assetId),left=clip.start*zoom,span=Math.max(28,clipLength(clip)*zoom);
         const chosen=clip.id===selectedId;
-        return <div key={clip.id} className={'ve-clip '+(chosen?'ve-clip-selected ':'')+'ve-'+track.kind} style={{left,width:span,zIndex:chosen?10:Math.round(clip.start)+1}}
+        return <div key={clip.id} className={'ve-clip '+(chosen?'ve-clip-selected ':'')+'ve-'+track.kind} style={{left,width:span,zIndex:chosen?10:Math.round(clip.start)+1,...(asset?.thumbnail?{backgroundImage:'linear-gradient(90deg,rgba(18,28,47,.74),rgba(18,28,47,.5)),url("'+asset.thumbnail+'")',backgroundSize:'cover',backgroundPosition:'center'}:{})}}
          draggable
          onDragStart={e=>{e.dataTransfer.setData('application/x-acs-clip',clip.id);e.dataTransfer.setData('application/x-acs-offset',String((e.clientX-e.currentTarget.getBoundingClientRect().left)/zoom));e.dataTransfer.effectAllowed='move';onSelect(clip.id)}}
          onDragOver={e=>e.preventDefault()}
