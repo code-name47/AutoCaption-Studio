@@ -7,6 +7,7 @@ import EditorTimeline from './EditorTimeline.jsx';
 import EditorInspector from './EditorInspector.jsx';
 import PanelSplitter from './PanelSplitter.jsx';
 import useLiveAIEditor from './useLiveAIEditor.js';
+import useBridgeTranscription from './useBridgeTranscription.js';
 import useLocalAIDemo from './useLocalAIDemo.js';
 import AIReviewPanel from './AIReviewPanel.jsx';
 import {editorProjectSnapshot} from './aiEditCommands.js';
@@ -367,6 +368,13 @@ export default function EditorWorkspace(){
  useEffect(()=>{const listener=e=>keysRef.current?.(e);window.addEventListener('keydown',listener);return()=>window.removeEventListener('keydown',listener)},[]);
  const trackMute=t=>setTrackMuted(m=>({...m,[t]:!m[t]}));
  const aiProject=useMemo(()=>editorProjectSnapshot({name,assets,clips,settings,tracks}),[name,assets,clips,settings,tracks]);
+ // ChatGPT can request transcription by asset ID. The audio never leaves this
+ // browser: local Whisper returns only the timestamped dialogue to the bridge.
+ useBridgeTranscription({
+  token:bridgeToken,assetsRef:assetRef,busy,onBusy:setBusy,
+  onSegments:(assetId,segments)=>setAssets(current=>current.map(a=>a.id===assetId?{...a,transcript:segments}:a)),
+  onNotice:note
+ });
  const ai=useLiveAIEditor({
   token:bridgeToken,project:aiProject,canApply:!busy&&!rendering&&!recordingTrackId,
   onStart:()=>{setPlaying(false);setSourceViewer(false);record()},
