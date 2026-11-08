@@ -433,7 +433,7 @@ export default function EditorWorkspace(){
    <PanelSplitter label="Resize Project Files panel" value={panelLayout.left} min={210} max={750} onResize={resizeLeft} onReset={()=>setPanelLayout(p=>({...p,left:300}))}/>
    <section className="ve-monitor-panel"><div className="ve-monitor-head"><strong>{sourceViewer?'Source viewer':'Program monitor'}</strong>
   <div className="ve-monitor-aspect" aria-label="Canvas orientation">{['16:9','9:16','1:1'].map(a=><button key={a} aria-pressed={settings.aspect===a} title={a==='16:9'?'Landscape':a==='9:16'?'Portrait':'Square'} onClick={()=>setSettings(s=>({...s,aspect:a}))}>{a}</button>)}</div>
-  <label className="ve-view-zoom">Canvas <input aria-label="Canvas view zoom" type="range" min="30" max="95" step="5" value={viewZoom} onChange={e=>setViewZoom(Number(e.target.value))}/>{viewZoom}%</label>
+  <label className="ve-view-zoom">Canvas <input aria-label="Canvas view zoom" type="range" min="30" max="160" step="5" value={viewZoom} onChange={e=>setViewZoom(Number(e.target.value))}/>{viewZoom}%</label>
   {recordingTrackId&&<span className="ve-recording-banner">● REC {recordingTrackId}</span>}
   <span>{settings.fps} fps</span><button onClick={()=>setSourceViewer(false)} disabled={!sourceViewer}>Timeline preview</button></div>
      <div className="ve-monitor-area">{sourceViewer&&selectedAsset?.url?
