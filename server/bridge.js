@@ -44,18 +44,20 @@ const TRANSCRIPTION_MODELS=new Set(['tiny','base','small']);
 function queueTranscription(session,args){
  const snapshot=visibleEditorSnapshot(session);
  if(!snapshot.connected)throw Error('Connect the browser editor before requesting transcription');
- // Backwards compatibility: some already-connected ChatGPT clients cache
- // the original queue_transcription tool schema with no arguments. For a
- // single imported media asset, there is only one safe choice. Never guess
- // when multiple assets are present.
+ // Already-connected ChatGPT clients may cache the original no-argument
+ // tool schema. In that case, enqueue the next imported video/audio without
+ // a nonfailed job, in the user's visible Project Files order. This never
+ // touches a different browser/account and never sends media bytes to MCP.
  const media=snapshot.project.assets.filter(a=>a.kind==='video'||a.kind==='audio');
- const assetId=args?.asset_id??(media.length===1?media[0].id:undefined);
- if(typeof assetId!=='string'||assetId.length>150)throw Error('Choose a valid asset_id from get_editor_project (required when multiple media files are imported)');
+ const model=args?.model??'base';
+ if(!TRANSCRIPTION_MODELS.has(model))throw Error('Model must be tiny, base, or small');
+ const pending=media.find(a=>Number.isFinite(a.duration)&&a.duration>0&&a.duration<=600&&
+  ![...session.jobs.values()].some(j=>j.asset_id===a.id&&j.model===model&&j.status!=='failed'));
+ const assetId=args?.asset_id??pending?.id;
+ if(typeof assetId!=='string'||assetId.length>150)throw Error('No unqueued imported video or audio remains. Call list_transcriptions to inspect existing jobs.');
  const asset=snapshot.project.assets.find(a=>a.id===assetId);
  if(!asset||!['video','audio'].includes(asset.kind))throw Error('Transcription asset must be an imported video or audio file');
  if(!Number.isFinite(asset.duration)||asset.duration<=0||asset.duration>600)throw Error('Transcription supports media under 10 minutes');
- const model=args?.model??'base';
- if(!TRANSCRIPTION_MODELS.has(model))throw Error('Model must be tiny, base, or small');
  const existing=[...session.jobs.values()].find(j=>j.asset_id===assetId&&j.model===model&&j.status!=='failed');
  if(existing)return existing;
  if(session.jobs.size>=10)throw Error('Session job limit reached');
