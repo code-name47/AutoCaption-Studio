@@ -72,7 +72,7 @@ export function addTransition(clips,id,type,duration){
  const previous=clips.filter(c=>c.id!==id&&c.kind!=='motion'&&c.trackId===current.trackId&&clipEnd(c)<=current.start+.1)
  .sort((a,b)=>clipEnd(b)-clipEnd(a))[0];
  const adjacent=previous&&Math.abs(clipEnd(previous)-current.start)<.2;
- const start=adjacent&&type!=='fade'?Math.max(previous.start+.05,current.start-d):current.start;
+ const start=adjacent&&!['fade','rise'].includes(type)?Math.max(previous.start+.05,current.start-d):current.start;
  return clips.map(c=>c.id===id?{...c,start:roundTime(start),transitionIn:type,transitionDuration:d}:c);
 }
 export const serializeProject=(name,assets,clips,settings={})=>({
