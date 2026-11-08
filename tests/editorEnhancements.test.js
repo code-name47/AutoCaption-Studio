@@ -5,6 +5,8 @@ import {detachAudioFromVideo,splitStereoAudio,rippleDelete,applyAudioPreset,clip
  chromaOpacity,syncLinkedAudio,splitLinkedVideoAudio,removeLinkedWithVideo} from '../src/editorEnhancements.js';
 import {applyChromaToPixels} from '../src/editorChroma.js';
 import {audioTrackEnabled} from '../src/editorAudio.js';
+import {waveformLines,recommendedPeakGain} from '../src/mediaWaveform.js';
+import {cropClipPath,cropMargins} from '../src/editorEnhancements.js';
 import {applyEditorAction} from '../src/aiEditCommands.js';
 
 const video=(id='v1',start=0,duration=5)=>newClip({id:'source',kind:'video',duration},'V1',start,id);
@@ -80,4 +82,29 @@ test('AI actions safely expose matching manual edit features',()=>{
  const removed=applyEditorAction(project([video('a',0,2),video('b',2,2)]),{type:'ripple_delete',clip_id:'a'});
  assert.equal(removed.project.clips[0].start,0);
  assert.throws(()=>applyEditorAction(project([video()]),{type:'set_clip_property',clip_id:'v1',property:'chromaTolerance',value:100}),/Invalid/);
+});
+
+test('waveforms preserve source trimming and normalize without clipping',()=>{
+ const peaks=Array.from({length:160},(_,i)=>i/200);
+ const path=waveformLines(peaks,2,6,10,32);
+ assert.equal((path.match(/M/g)||[]).length,32);
+ assert.equal(recommendedPeakGain([.5,.3]),1.86);
+ assert.throws(()=>recommendedPeakGain([0,0]),/silent/);
+});
+
+test('crop geometry is limited and composes with wipe progress',()=>{
+ const c={cropLeft:12,cropRight:5,cropTop:8,cropBottom:3};
+ assert.equal(cropClipPath(c),'inset(8% 5% 3% 12%)');
+ assert.equal(cropMargins(c,45).right,45);
+ assert.equal(cropMargins({...c,cropLeft:999}).left,49);
+});
+
+test('AI honors locked clips until explicitly unlocked',()=>{
+ const c=video();c.locked=true;
+ const p=project([c]);
+ assert.throws(()=>applyEditorAction(p,{type:'trim_clip',clip_id:'v1',in_point:0,out_point:2}),/Unlock/);
+ const unlocked=applyEditorAction(p,{type:'set_clip_property',clip_id:'v1',property:'locked',value:false});
+ assert.equal(unlocked.project.clips[0].locked,false);
+ const trimmed=applyEditorAction(unlocked.project,{type:'trim_clip',clip_id:'v1',in_point:1,out_point:3});
+ assert.equal(trimmed.project.clips[0].inPoint,1);
 });
