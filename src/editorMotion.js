@@ -3,7 +3,9 @@ import {clipEnd,renderOpacity} from './editorCore.js';
 export const MOTION_FIELDS=['offsetX','offsetY','scale','rotation','opacity','fontSize','positionY','volume','brightness','contrast','saturation','fontWeight','fontColor','fontFamily','text'];
 export const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export const captureMotion=c=>Object.fromEntries(MOTION_FIELDS.map(key=>[key,typeof c?.[key]==='string'?c[key]:Number(c?.[key]??(key==='scale'||key==='opacity'||key==='volume'||key==='brightness'||key==='contrast'||key==='saturation'?1:0))]));
+const overlapCache=new WeakMap();
 export function overlaps(clips){
+ const cached=overlapCache.get(clips);if(cached)return cached;
  const byTrack=new Map();
  for(const c of clips)if(c.kind!=='motion'){
   if(!byTrack.has(c.trackId))byTrack.set(c.trackId,[]);
@@ -18,6 +20,7 @@ export function overlaps(clips){
    if(end-start>=.04)result.push({id:outgoing.id+':'+incoming.id,trackId,outgoingId:outgoing.id,incomingId:incoming.id,start,end,duration:end-start});
   }
  }
+ overlapCache.set(clips,result);
  return result;
 }
 export function overlapFor(clip,clips,time){
@@ -45,7 +48,7 @@ function blendColor(a,b,k){
 }
 export function animateAt(keyframes,seconds){
  if(!Array.isArray(keyframes)||!keyframes.length)return {};
- const frames=keyframes.slice().sort((a,b)=>a.t-b.t);
+ const frames=keyframes;
  if(seconds<=frames[0].t)return {...frames[0].values};
  for(let i=1;i<frames.length;i++)if(seconds<=frames[i].t){
   const a=frames[i-1],b=frames[i],k=clamp((seconds-a.t)/Math.max(.001,b.t-a.t),0,1);
@@ -80,7 +83,7 @@ export function newMotionClip({id,trackId,targetClipId,start,end,keyframes}){
  const duration=Math.max(.12,end-start);
  return {id,trackId,targetClipId,assetId:null,kind:'motion',start:Math.max(0,start),
   inPoint:0,outPoint:duration,speed:1,transitionIn:'none',transitionDuration:0,
-  keyframes:keyframes.map(k=>({t:clamp(k.t,0,duration),values:{...k.values}}))};
+  keyframes:keyframes.map(k=>({t:clamp(k.t,0,duration),values:{...k.values}})).sort((a,b)=>a.t-b.t)};
 }
 
 export function visualClipOpacity(clip,clips,time){
