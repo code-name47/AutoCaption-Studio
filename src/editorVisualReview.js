@@ -24,7 +24,38 @@ export function reviewSampleTimes(clips,maxFrames=6){
  return times.sort((a,b)=>a-b);
 }
 
-export function reviewTimelineNotes(clips){
+// Best-effort text-to-transcript check. Does not assert word-level timestamp
+// precision: Whisper browser output may contain only multi-second segments.
+const words=value=>[...new Set(String(value||'').toLowerCase().match(/[a-z0-9']+/g)||[])].filter(w=>w.length>=3);
+export function reviewTranscriptAlignment(clips,assets=[]){
+ const byId=new Map(assets.map(a=>[a.id,a]));
+ const captions=clips.filter(c=>c.kind==='text'&&c.trackId==='C1');
+ const videos=clips.filter(c=>c.kind==='video'&&!c.trackId.startsWith('A'));
+ const flags=[];let checked=0,missing=0;
+ for(const caption of captions){
+  const at=caption.start+(clipEnd(caption)-caption.start)/2;
+  let best=null;
+  for(const video of videos){
+   if(at<video.start||at>clipEnd(video))continue;
+   const source=byId.get(video.assetId);
+   if(!source?.transcript?.length)continue;
+   const begin=video.inPoint+(Math.max(caption.start,video.start)-video.start)*video.speed;
+   const end=video.inPoint+(Math.min(clipEnd(caption),clipEnd(video))-video.start)*video.speed;
+   const segments=source.transcript.filter(segment=>Number(segment.end)>=begin-.45&&Number(segment.start)<=end+.45);
+   if(!segments.length)continue;
+   const expected=new Set(words(segments.map(segment=>segment.text).join(' ')));
+   const actual=words(caption.text),fraction=actual.length?actual.filter(w=>expected.has(w)).length/actual.length:1;
+   if(!best||fraction>best.fraction)best={fraction,asset:source,actual};
+  }
+  if(!best){missing++;continue}
+  checked++;
+  if(best.actual.length>=2&&best.fraction<.36)
+   flags.push('Possible transcript/caption mismatch near '+round(caption.start)+'s: "'+String(caption.text).slice(0,70)+'"');
+ }
+ return {checked,missing,flags:flags.slice(0,8)};
+}
+
+export function reviewTimelineNotes(clips,assets=[]){
  const notes=[],duration=timelineDuration(clips);
  const videos=clips.filter(c=>c.kind==='video'&&!c.trackId.startsWith('A'))
   .sort((a,b)=>a.start-b.start);
@@ -47,7 +78,13 @@ export function reviewTimelineNotes(clips){
   if(videoEnd-captionEnd>.15)notes.push('Last caption ends '+round(videoEnd-captionEnd)+'s before the picture ends');
   if(captionEnd-videoEnd>.12)notes.push('Captions continue '+round(captionEnd-videoEnd)+'s beyond the video');
  }
- if(!captions.length)notes.push('No caption clips on the C1 track');
+ const transcriptAudit=reviewTranscriptAlignment(clips,assets);
+ notes.push(...transcriptAudit.flags);
+ if(captions.length&&transcriptAudit.checked===0)
+  notes.push('Speech-to-caption alignment could not be checked: source transcripts are unavailable or do not overlap these cuts.');
+ else if(transcriptAudit.checked>0)
+  notes.push('Compared '+transcriptAudit.checked+' captions against source transcript segments; this is not word-accurate audio verification.');
+  if(!captions.length)notes.push('No caption clips on the C1 track');
  if(!videos.length)notes.push('No video clips on the timeline');
  if(duration>600)notes.push('Timelines longer than 10 minutes are not supported by this preview sampler');
  return notes.slice(0,18);
@@ -180,7 +217,7 @@ export async function captureVisualReview({assets,clips,settings}){
  const ctx=canvas.getContext('2d',{alpha:false});
  if(!ctx)throw Error('Canvas preview inspection is unavailable in this browser.');
  const nodes=new Map(),assetsById=new Map(assets.map(a=>[a.id,a]));
- const frames=[],notes=reviewTimelineNotes(clips);
+ const frames=[],notes=reviewTimelineNotes(clips,assets);
  try{
   for(const t of times){
    await paintFrame(ctx,clips,assetsById,nodes,t,width,height);
