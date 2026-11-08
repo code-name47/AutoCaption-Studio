@@ -285,7 +285,7 @@ export default function EditorWorkspace(){
      <div className="ve-media-actions"><button className="ve-accent-btn" onClick={()=>input.current?.click()}>+ Import media</button><button onClick={importFromDrive} disabled={busy}>Google Drive</button></div>
      <p className="ve-hint">Drag a file onto a video or audio track. Click a file to preview it.</p>
      <div className="ve-media-items">{assets.length===0?<div className="ve-empty-bin">No media yet. Import videos, audio, or images to begin.</div>:assets.map(a=><div key={a.id} className={'ve-media-item '+(selectedAssetId===a.id?'selected':'')} draggable
-      onDragStart={e=>{e.dataTransfer.setData('application/x-acs-asset',a.id);e.dataTransfer.effectAllowed='copy'}}
+      onDragStart={e=>{e.dataTransfer.setData('application/x-acs-asset',a.id);e.dataTransfer.effectAllowed='copyMove'}}
       onClick={()=>{setSelectedAssetId(a.id);setSourceViewer(true);setPlaying(false)}}>
        <div className="ve-media-icon">{a.thumbnail?<img src={a.thumbnail} alt=""/>:a.kind==='audio'?'♫':a.kind==='image'?'▧':'▶'}</div><div className="ve-media-info"><strong title={a.name}>{a.name}</strong><small>{a.kind} · {timeLabel(a.duration)}{a.transcript?.length?' · captions':''}</small></div>
        <button title="Add to timeline" onClick={e=>{e.stopPropagation();placeAsset(a.id,a.kind==='audio'?'A1':'V1',timelineDuration(clips))}}>+</button>
