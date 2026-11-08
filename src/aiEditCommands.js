@@ -6,7 +6,7 @@ import {detachAudioFromVideo,rippleDelete,applyAudioPreset} from './editorEnhanc
 const ASPECTS=['16:9','9:16','1:1'];
 const TRANSITIONS=['none','crossfade','fade','wipe','slide','rise'];
 const PROPERTY_RANGES={
- volume:[0,1],opacity:[0,1],scale:[.05,10],offsetX:[-300,300],offsetY:[-100,100],
+ volume:[0,2],opacity:[0,1],scale:[.05,10],offsetX:[-300,300],offsetY:[-100,100],
  rotation:[-180,180],brightness:[.2,2],contrast:[.2,2],saturation:[0,3],
  fontSize:[1,500],positionY:[0,100],speed:[.1,4],pan:[-1,1],eqLow:[-18,18],eqMid:[-18,18],eqHigh:[-18,18],
  chromaTolerance:[.01,.9],chromaSoftness:[0,.5],textOutlineWidth:[0,12],textShadow:[0,1],hueRotate:[-180,180],blur:[0,20]
