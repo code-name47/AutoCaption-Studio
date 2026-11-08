@@ -2,7 +2,7 @@ import React,{useMemo,useRef,useState} from 'react';
 import {clipEnd,clipLength,TRACKS} from './editorCore.js';
 const CLOCK=n=>{const m=Math.floor(n/60),s=Math.floor(n%60);return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')};
 export default function EditorTimeline({tracks=TRACKS,clips,assets,time,zoom,setZoom,onSeek,onSelect,selectedId,onPlace,onMove,onTrim,onTrimStart,onTransition,onRemove,onAddTrack,trackMuted,onToggleTrackMute}){
- const [dragHint,setDragHint]=useState(''),trimRef=useRef(null),scroller=useRef(null),rulerRef=useRef(null);
+ const [dragHint,setDragHint]=useState(''),[expanded,setExpanded]=useState(false),trimRef=useRef(null),scroller=useRef(null),rulerRef=useRef(null);
  const total=Math.max(30,...clips.map(c=>clipEnd(c)+5));
  const width=Math.max(1100,total*zoom+300);
  const tick=Math.max(1,Math.round(100/zoom));
@@ -23,7 +23,7 @@ export default function EditorTimeline({tracks=TRACKS,clips,assets,time,zoom,set
  function updateTrim(e){if(!trimRef.current)return;const r=trimRef.current;onTrim(r.id,r.side,(e.clientX-r.x)/zoom,r.original)}
  function endTrim(e){trimRef.current=null;try{e.currentTarget.releasePointerCapture(e.pointerId)}catch{}}
  function seekFrom(e){const rect=rulerRef.current?.getBoundingClientRect();if(!rect)return;onSeek(Math.max(0,(e.clientX-rect.left)/zoom))}
- return <div className="ve-timeline">
+ return <div className={"ve-timeline"+(expanded?" ve-expanded":"")}>
   <header className="ve-timeline-tools">
    <div className="ve-timeline-heading"><strong>Timeline</strong><span>{tracks.length} tracks</span></div>
    <button onClick={()=>onAddTrack('video')} title="Create video track">+ Video track</button>
@@ -32,7 +32,7 @@ export default function EditorTimeline({tracks=TRACKS,clips,assets,time,zoom,set
    <button title="Zoom out" onClick={()=>setZoom(z=>Math.max(14,z-12))}>−</button>
    <input title="Timeline zoom" aria-label="Timeline zoom" type="range" min="14" max="160" step="2" value={zoom} onChange={e=>setZoom(Number(e.target.value))}/>
    <button title="Zoom in" onClick={()=>setZoom(z=>Math.min(160,z+12))}>+</button>
-   <button title="Fit timeline" onClick={()=>{const viewport=scroller.current?.clientWidth||1000;setZoom(Math.max(14,Math.min(120,(viewport-180)/Math.max(10,total))))}}>Fit</button>
+   <button title={expanded?"Reduce timeline height":"Expand timeline height"} onClick={()=>setExpanded(v=>!v)}>{expanded?"▤":"▣"}</button><button title="Fit timeline" onClick={()=>{const viewport=scroller.current?.clientWidth||1000;setZoom(Math.max(14,Math.min(120,(viewport-180)/Math.max(10,total))))}}>Fit</button>
   </header>
   <div className="ve-timeline-scroll" ref={scroller}>
    <div className="ve-timeline-body" style={{width:width+116}}>
