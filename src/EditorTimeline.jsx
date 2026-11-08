@@ -84,7 +84,7 @@ export default function EditorTimeline({
    <button onClick={()=>onAddTrack('video')} title="Create video track">+ Video track</button>
    <button onClick={()=>onAddTrack('audio')} title="Create audio track">+ Audio track</button>
    <div className="ve-timeline-spacer"/>
-   <button title="Add marker at playhead" onClick={onAddMarker}>+ Marker</button>
+   <button title="Add marker at playhead" aria-label="Add marker at playhead" onClick={onAddMarker}>+ Marker</button>
    <button title="Zoom out" onClick={()=>setZoom(z=>Math.max(14,z-12))}>−</button>
    <input title="Timeline zoom" aria-label="Timeline zoom" type="range" min="14" max="160" step="2" value={zoom} onChange={e=>setZoom(Number(e.target.value))}/>
    <button title="Zoom in" onClick={()=>setZoom(z=>Math.min(160,z+12))}>+</button>
