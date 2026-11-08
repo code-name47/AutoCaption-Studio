@@ -8,7 +8,7 @@ export default function EditorTimeline({
  tracks=TRACKS,clips,assets,time,zoom,setZoom,onSeek,onSelect,selectedId,onPlace,onMove,onTrim,onTrimStart,
  onTransition,onRemove,onAddTrack,onRemoveTrack,onSplit,onDuplicate,onAddTitle,onPatch,onDetachAudio,onSplitStereo,onRippleDelete,
  trackMuted,trackSolo={},onToggleTrackMute,onToggleTrackSolo,recordingTrackId,onToggleRecord,onOpenInspector,
- panelHeight=335,expanded=false,onToggleExpanded
+ markers=[],onAddMarker,onRemoveMarker,panelHeight=335,expanded=false,onToggleExpanded
 }){
  const [dragHint,setDragHint]=useState(''),[menu,setMenu]=useState(null);
  const [labelWidth,setLabelWidth]=useState(()=>{
@@ -84,6 +84,7 @@ export default function EditorTimeline({
    <button onClick={()=>onAddTrack('video')} title="Create video track">+ Video track</button>
    <button onClick={()=>onAddTrack('audio')} title="Create audio track">+ Audio track</button>
    <div className="ve-timeline-spacer"/>
+   <button title="Add marker at playhead" onClick={onAddMarker}>+ Marker</button>
    <button title="Zoom out" onClick={()=>setZoom(z=>Math.max(14,z-12))}>−</button>
    <input title="Timeline zoom" aria-label="Timeline zoom" type="range" min="14" max="160" step="2" value={zoom} onChange={e=>setZoom(Number(e.target.value))}/>
    <button title="Zoom in" onClick={()=>setZoom(z=>Math.min(160,z+12))}>+</button>
@@ -102,6 +103,11 @@ export default function EditorTimeline({
      </div>
      <div className="ve-ruler" ref={rulerRef} style={{width}} onPointerDown={startScrubbing} onPointerMove={moveScrubbing} onPointerUp={stopScrubbing} onPointerCancel={stopScrubbing} onDragStart={e=>e.preventDefault()}>
       {marks.map(n=><span className="ve-ruler-mark" style={{left:n*zoom}} key={n}>{CLOCK(n)}</span>)}
+      {markers.map(marker=><button key={marker.id} className="ve-ruler-marker" style={{left:marker.time*zoom}}
+       title={(marker.label||'Marker')+' at '+CLOCK(marker.time)+' · right-click to delete'}
+       aria-label={'Jump to marker '+(marker.label||CLOCK(marker.time))}
+       onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();onSeek(marker.time)}}
+       onContextMenu={e=>{e.preventDefault();e.stopPropagation();onRemoveMarker(marker.id)}}>◆</button>)}
       <div className="ve-ruler-playhead" aria-label="Drag timeline playhead" data-testid="playhead-handle"
        style={{left:time*zoom}} onPointerDown={startScrubbing} onPointerMove={moveScrubbing} onPointerUp={stopScrubbing} onPointerCancel={stopScrubbing}>
        <span aria-hidden="true"/>
