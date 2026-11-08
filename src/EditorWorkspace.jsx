@@ -92,7 +92,7 @@ export default function EditorWorkspace(){
  [assets,setAssets]=useState([]),[clips,setClips]=useState([]),[selectedId,setSelectedId]=useState(''),[selectedAssetId,setSelectedAssetId]=useState(''),
  [sourceViewer,setSourceViewer]=useState(false),[time,setTime]=useState(0),[playing,setPlaying]=useState(false),
  [zoom,setZoom]=useState(36),[viewZoom,setViewZoom]=useState(70),[panelLayout,setPanelLayout]=useState(loadPanelLayout),[timelineExpanded,setTimelineExpanded]=useState(false),[tab,setTab]=useState('media'),[inspectorOpen,setInspectorOpen]=useState(true),
- [trackMuted,setTrackMuted]=useState({}),[trackSolo,setTrackSolo]=useState({}),[status,setStatus]=useState('Ready'),[busy,setBusy]=useState(false),
+ [trackMuted,setTrackMuted]=useState({}),[trackSolo,setTrackSolo]=useState({}),[markers,setMarkers]=useState([]),[status,setStatus]=useState('Ready'),[busy,setBusy]=useState(false),
  [model,setModel]=useState('tiny'),[googleAccount,setGoogleAccount]=useState(''),[bridgeToken,setBridgeToken]=useState(''),
  [rendering,setRendering]=useState(false),[renderProgress,setRenderProgress]=useState(0),[historyVersion,setHistoryVersion]=useState(0),[recordingTrackId,setRecordingTrackId]=useState(''),[visualReviewBusy,setVisualReviewBusy]=useState(false),[visualReviewInfo,setVisualReviewInfo]=useState(null),[showCaptionAudit,setShowCaptionAudit]=useState(false);
  const editorMain=useRef(null),beforeExpand=useRef(null),input=useRef(null),audioInput=useRef(null),assetRef=useRef([]),fileImportActive=useRef(false),transcriptionWorker=useRef(null);
@@ -311,6 +311,15 @@ export default function EditorWorkspace(){
  }
  function transition(id,type,duration){if(clips.find(c=>c.id===id)?.locked){note('Unlock clip before changing transitions.');return}if(clips.find(c=>c.id===id)?.kind==='motion'){note('Transitions apply to media, not motion clips.');return}record();setClips(cs=>addTransition(cs,id,type,duration));setSelectedId(id);note(type==='none'?'Transition removed':type+' transition applied')}
  function addTrack(kind){const prefix=kind==='audio'?'A':'V',count=tracks.filter(t=>t.id.startsWith(prefix)).length;if(count>=12){note('Maximum 12 '+kind+' tracks');return}const number=tracks.reduce((m,t)=>t.id.startsWith(prefix)?Math.max(m,Number(t.id.slice(1))):m,0)+1;const track={id:prefix+number,label:(kind==='audio'?'Audio ':'Video ')+number,kind,z:kind==='audio'?0:number*10};setTracks(old=>kind==='audio'?[...old,track]:[track,...old]);note('Added '+track.label)}
+ function addMarker(){
+  if(markers.length>=250){note('Maximum 250 timeline markers');return}
+  const at=Math.round(timeRef.current*100)/100;
+  if(markers.some(m=>Math.abs(m.time-at)<.08)){note('There is already a marker here.');return}
+  const marker={id:uid(),time:at,label:'Marker '+(markers.length+1)};
+  setMarkers(m=>[...m,marker].sort((a,b)=>a.time-b.time));
+  note('Added marker at '+timeLabel(at));
+ }
+ function removeMarker(id){setMarkers(m=>m.filter(x=>x.id!==id));note('Timeline marker removed')}
  function normalizeAudio(id){
   const clip=clipsRef.current.find(c=>c.id===id);
   const asset=assets.find(a=>a.id===clip?.assetId);
@@ -468,7 +477,7 @@ export default function EditorWorkspace(){
  }
  async function saveProject(){
   if(busy||rendering)return;setBusy(true);note('Saving project and media to this browser…');
-  try{const metadata=serializeProject(name,assets,clips,{...settings,tracks,trackMuted,trackSolo});await saveBrowserProject(metadata,assets);note('Project saved in this browser. It is not uploaded to the cloud.')}
+  try{const metadata=serializeProject(name,assets,clips,{...settings,tracks,trackMuted,trackSolo,markers});await saveBrowserProject(metadata,assets);note('Project saved in this browser. It is not uploaded to the cloud.')}
   catch(e){note('Save failed: '+(e?.name==='QuotaExceededError'?'Browser storage quota exceeded. Try a smaller project.':e.message))}finally{setBusy(false)}
  }
  async function loadProject(){
@@ -479,7 +488,7 @@ export default function EditorWorkspace(){
    setAssets(p.assets);populateThumbnails(p.assets.filter(a=>a.url));populateWaveforms(p.assets.filter(a=>a.file&&!a.waveform));setClips(p.clips);setName(p.name);
    setSettings({aspect:p.settings?.aspect||'16:9',fps:Number(p.settings?.fps)||30});
    setTracks(Array.isArray(p.settings?.tracks)&&p.settings.tracks.length?p.settings.tracks:TRACKS);
-   setTrackMuted(p.settings?.trackMuted||{});setTrackSolo(p.settings?.trackSolo||{});
+   setTrackMuted(p.settings?.trackMuted||{});setTrackSolo(p.settings?.trackSolo||{});setMarkers(Array.isArray(p.settings?.markers)?p.settings.markers.slice(0,250):[]);
    setSelectedId('');setSelectedAssetId('');setSourceViewer(false);setRecordingTrackId('');recording.current=null;setTime(0);timeRef.current=0;past.current=[];future.current=[];
    note('Saved project loaded'+(p.assets.some(x=>x.missing)?'. Some media must be reimported.':'.'));
   }catch(e){note('Could not load project: '+e.message)}finally{setBusy(false)}
@@ -508,7 +517,7 @@ export default function EditorWorkspace(){
  useEffect(()=>{const listener=e=>keysRef.current?.(e);window.addEventListener('keydown',listener);return()=>window.removeEventListener('keydown',listener)},[]);
  const trackMute=t=>setTrackMuted(m=>({...m,[t]:!m[t]}));
  const trackSoloToggle=t=>setTrackSolo(m=>({...m,[t]:!m[t]}));
- const aiProject=useMemo(()=>editorProjectSnapshot({name,assets,clips,settings,tracks}),[name,assets,clips,settings,tracks]);
+ const aiProject=useMemo(()=>editorProjectSnapshot({name,assets,clips,settings:{...settings,markers},tracks}),[name,assets,clips,settings,tracks,markers]);
  // ChatGPT can request transcription by asset ID. The audio never leaves this
  // browser: local Whisper returns only the timestamped dialogue to the bridge.
  useBridgeTranscription({
@@ -656,7 +665,7 @@ export default function EditorWorkspace(){
    <button className="ve-inspector-toggle" onClick={()=>setInspectorOpen(v=>!v)} title={inspectorOpen?'Hide inspector':'Show inspector'}>{inspectorOpen?'›':'‹'}</button>
   </div>
   <PanelSplitter axis="horizontal" label="Resize timeline height" value={panelLayout.timeline} min={200} max={850} onResize={resizeTimeline} onReset={()=>{setTimelineExpanded(false);setPanelLayout(p=>({...p,timeline:freshPanelLayout().timeline}))}}/>
-  <EditorTimeline panelHeight={panelLayout.timeline} expanded={timelineExpanded} onToggleExpanded={toggleTimelineSize} tracks={tracks} clips={clips} assets={assets} time={time} zoom={zoom} setZoom={setZoom} onSeek={seek} onSelect={id=>{setSelectedId(id);setSourceViewer(false);const item=clipsRef.current.find(c=>c.id===id);if(item&&item.kind!=='motion'&&(timeRef.current<item.start||timeRef.current>=clipEnd(item))){timeRef.current=item.start+.01;setTime(timeRef.current);setPlaying(false)}}} selectedId={selectedId} onPlace={placeAsset} onMove={moveClip} onTrim={trim} onTrimStart={record} onTransition={transition} onRemove={removeClip} onSplit={split} onDuplicate={duplicateClip} onDetachAudio={detachAudio} onSplitStereo={separateStereoChannels} onRippleDelete={rippleRemove} onAddTitle={trackId=>addTitle("New text",trackId,3)} onPatch={updateClip} onAddTrack={addTrack} onRemoveTrack={removeTrack} trackMuted={trackMuted} trackSolo={trackSolo} onToggleTrackMute={trackMute} onToggleTrackSolo={trackSoloToggle} recordingTrackId={recordingTrackId} onToggleRecord={toggleRecord} onOpenInspector={id=>{setSelectedId(id);setInspectorOpen(true)}}/>
+  <EditorTimeline panelHeight={panelLayout.timeline} expanded={timelineExpanded} onToggleExpanded={toggleTimelineSize} markers={markers} onAddMarker={addMarker} onRemoveMarker={removeMarker} tracks={tracks} clips={clips} assets={assets} time={time} zoom={zoom} setZoom={setZoom} onSeek={seek} onSelect={id=>{setSelectedId(id);setSourceViewer(false);const item=clipsRef.current.find(c=>c.id===id);if(item&&item.kind!=='motion'&&(timeRef.current<item.start||timeRef.current>=clipEnd(item))){timeRef.current=item.start+.01;setTime(timeRef.current);setPlaying(false)}}} selectedId={selectedId} onPlace={placeAsset} onMove={moveClip} onTrim={trim} onTrimStart={record} onTransition={transition} onRemove={removeClip} onSplit={split} onDuplicate={duplicateClip} onDetachAudio={detachAudio} onSplitStereo={separateStereoChannels} onRippleDelete={rippleRemove} onAddTitle={trackId=>addTitle("New text",trackId,3)} onPatch={updateClip} onAddTrack={addTrack} onRemoveTrack={removeTrack} trackMuted={trackMuted} trackSolo={trackSolo} onToggleTrackMute={trackMute} onToggleTrackSolo={trackSoloToggle} recordingTrackId={recordingTrackId} onToggleRecord={toggleRecord} onOpenInspector={id=>{setSelectedId(id);setInspectorOpen(true)}}/>
   <AIReviewPanel review={shownAI.review} applying={shownAI.applying} progress={shownAI.progress} recent={shownAI.recent} error={shownAI.error}
     onApprove={shownAI.approve} onReject={shownAI.reject} onRevert={shownAI.revert} onDismiss={shownAI.dismiss}/>
   <input ref={input} type="file" multiple hidden accept="video/*,audio/*,image/*" onChange={e=>{importFiles(e.target.files);e.target.value=''}}/>
