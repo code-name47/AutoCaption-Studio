@@ -103,7 +103,7 @@ export default function EditorTimeline({
      </div>
      <div className="ve-ruler" ref={rulerRef} style={{width}} onPointerDown={startScrubbing} onPointerMove={moveScrubbing} onPointerUp={stopScrubbing} onPointerCancel={stopScrubbing} onDragStart={e=>e.preventDefault()}>
       {marks.map(n=><span className="ve-ruler-mark" style={{left:n*zoom}} key={n}>{CLOCK(n)}</span>)}
-      {markers.map(marker=><button key={marker.id} className="ve-ruler-marker" style={{left:marker.time*zoom}}
+      {markers.map(marker=><button key={marker.id} className="ve-ruler-marker" style={{left:Math.max(12,marker.time*zoom)}}
        title={(marker.label||'Marker')+' at '+CLOCK(marker.time)+' · right-click to delete'}
        aria-label={'Jump to marker '+(marker.label||CLOCK(marker.time))}
        onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();onSeek(marker.time)}}
