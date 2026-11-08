@@ -26,6 +26,17 @@ jobs:
         run: npm run build
       - name: Test interactive editor
         run: npm run test:ui
+      - name: Test real AI MCP commands operating the browser
+        run: npx playwright test --config playwright.integration.config.js
+      - name: Upload proof of live AI browser edits
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-edits-live-browser-proof
+          path: |
+            test-results/ai-run-evidence/
+            test-results/ai-real-run/
+          retention-days: 7
       - name: Upload browser test report on failure
         if: failure()
         uses: actions/upload-artifact@v4
