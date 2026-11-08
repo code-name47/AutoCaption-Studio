@@ -73,7 +73,7 @@ export default function EditorWorkspace(){
  const [name,setName]=useState('Untitled project'),[settings,setSettings]=useState(blankSettings),[tracks,setTracks]=useState(TRACKS),
  [assets,setAssets]=useState([]),[clips,setClips]=useState([]),[selectedId,setSelectedId]=useState(''),[selectedAssetId,setSelectedAssetId]=useState(''),
  [sourceViewer,setSourceViewer]=useState(false),[time,setTime]=useState(0),[playing,setPlaying]=useState(false),
- [zoom,setZoom]=useState(36),[tab,setTab]=useState('media'),[inspectorOpen,setInspectorOpen]=useState(true),
+ [zoom,setZoom]=useState(36),[viewZoom,setViewZoom]=useState(70),[tab,setTab]=useState('media'),[inspectorOpen,setInspectorOpen]=useState(true),
  [trackMuted,setTrackMuted]=useState({}),[status,setStatus]=useState('Ready'),[busy,setBusy]=useState(false),
  [model,setModel]=useState('tiny'),[googleAccount,setGoogleAccount]=useState(''),[bridgeToken,setBridgeToken]=useState(''),
  [rendering,setRendering]=useState(false),[renderProgress,setRenderProgress]=useState(0),[historyVersion,setHistoryVersion]=useState(0),[recordingTrackId,setRecordingTrackId]=useState('');
@@ -389,11 +389,12 @@ export default function EditorWorkspace(){
    </aside>
    <section className="ve-monitor-panel"><div className="ve-monitor-head"><strong>{sourceViewer?'Source viewer':'Program monitor'}</strong>
   <div className="ve-monitor-aspect" aria-label="Canvas orientation">{['16:9','9:16','1:1'].map(a=><button key={a} aria-pressed={settings.aspect===a} title={a==='16:9'?'Landscape':a==='9:16'?'Portrait':'Square'} onClick={()=>setSettings(s=>({...s,aspect:a}))}>{a}</button>)}</div>
+  <label className="ve-view-zoom">Canvas <input aria-label="Canvas view zoom" type="range" min="30" max="95" step="5" value={viewZoom} onChange={e=>setViewZoom(Number(e.target.value))}/>{viewZoom}%</label>
   {recordingTrackId&&<span className="ve-recording-banner">● REC {recordingTrackId}</span>}
   <span>{settings.fps} fps</span><button onClick={()=>setSourceViewer(false)} disabled={!sourceViewer}>Timeline preview</button></div>
      <div className="ve-monitor-area">{sourceViewer&&selectedAsset?.url?
        (selectedAsset.kind==='image'?<img className="ve-source-player" alt={selectedAsset.name} src={selectedAsset.url}/>:selectedAsset.kind==='audio'?<audio className="ve-source-audio" src={selectedAsset.url} controls/>:<video key={selectedAsset.id} className="ve-source-player" controls src={selectedAsset.url}/>)
-       :<EditorPreview assets={assets} clips={clips} time={time} playing={playing} selectedId={selectedId} onSelect={id=>{setSelectedId(id);const clip=clips.find(c=>c.id===id);if(clip?.assetId)setSelectedAssetId(clip.assetId);setSourceViewer(false)}} aspect={settings.aspect} trackMuted={trackMuted} onTransformStart={transformStart} onTransform={transformLive} onTransformEnd={()=>{}}/>}
+       :<EditorPreview assets={assets} clips={clips} time={time} playing={playing} selectedId={selectedId} onSelect={id=>{setSelectedId(id);const clip=clips.find(c=>c.id===id);if(clip?.assetId)setSelectedAssetId(clip.assetId);setSourceViewer(false)}} aspect={settings.aspect} viewZoom={viewZoom} trackMuted={trackMuted} onTransformStart={transformStart} onTransform={transformLive} onTransformEnd={()=>{}}/>}
      </div><div className="ve-transport"><button onClick={()=>seek(0)} title="Go to start">⏮</button><button className="ve-play" onClick={togglePlay}>{playing?'❚❚':'▶'}</button><button onClick={()=>seek(Math.min(length,time+5))} title="Skip 5 seconds">⏭</button><span>{timeLabel(time)} / {timeLabel(length)}</span><div className="ve-transport-fill"/><span className="ve-status-mini">{playing?'PLAY':'EDIT'}</span></div>
    </section>
    {inspectorOpen&&<EditorInspector clip={currentClip} asset={currentAsset} settings={settings} onSettings={setSettings} onPatch={updateClip} onTransition={transition} onSplit={split} onDelete={removeClip} time={time}/>}
