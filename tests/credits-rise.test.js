@@ -51,6 +51,6 @@ test('one AI action styles every caption and preserves video and gold closing te
  assert.equal(b.fontColor,'#FFE4A8');
  assert.equal(v.kind,'video');
  assert.equal(v.transitionIn,'none');
- assert.equal(p.clips[0].fontSize,36);
+ assert.equal(p.clips[0].fontSize,48);
  assert.throws(()=>applyEditorAction(p,{type:'style_captions',font_size:999,last_font_size:44,position_y:80,rise_duration:.4}),/font size/);
 });
