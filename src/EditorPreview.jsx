@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {activeClips,clipEnd,renderOpacity,transitionProgress,trackFor} from './editorCore.js';
 import {resolvedClip,visualClipOpacity,audioClipGain,clamp,captureMotion,risingTextPosition} from './editorMotion.js';
 import {attachAudioGraph,audioTrackEnabled} from './editorAudio.js';
+import ChromaLayer from './ChromaLayer.jsx';
 
 const between=(n,a,b)=>Math.min(b,Math.max(a,n));
 function layerStyle(clip,time,clips){
@@ -9,7 +10,7 @@ function layerStyle(clip,time,clips){
  const alpha=visualClipOpacity(clip,clips,time);
  const style={opacity:between(alpha,0,1),zIndex:trackFor(clip.trackId)?.z||1,
   transform:'translate('+clip.offsetX+'%, '+clip.offsetY+'%) scale('+clip.scale+') rotate('+clip.rotation+'deg)',
-  filter:'brightness('+clip.brightness+') contrast('+clip.contrast+') saturate('+clip.saturation+')'};
+  filter:'brightness('+clip.brightness+') contrast('+clip.contrast+') saturate('+clip.saturation+') hue-rotate('+(clip.hueRotate??0)+'deg) blur('+(clip.blur??0)+'px)'};
  if(clip.transitionIn==='wipe')style.clipPath='inset(0 '+((1-progress)*100)+'% 0 0)';
  if(clip.transitionIn==='slide')style.transform='translateX('+((1-progress)*100)+'%) '+style.transform;
  return style;
@@ -136,16 +137,25 @@ export default function EditorPreview({
        left:(50+Number(clip.offsetX||0))+'%',transform:'translate(-50%,-50%) scale('+clip.scale+') rotate('+clip.rotation+'deg)',
        fontSize:cssSize+'px',lineHeight:1.3,
        fontFamily:clip.fontFamily,color:clip.fontColor,fontWeight:clip.fontWeight,
+       WebkitTextStroke:((clip.textOutlineWidth||0)*size.w/1280)+'px '+(clip.textOutlineColor||'#000000'),
+       textShadow:'0 1px '+Math.max(0,8*size.w/1280)+'px rgba(0,0,0,'+(clip.textShadow??.9)+')',
        textAlign:'center',whiteSpace:'pre-wrap',maxWidth:'190%',width:'max-content'
       }}>{clip.text}</div>;
      }
      if(!asset?.url)return null;
-     if(clip.kind==='image')return <img key={clip.id} {...common} className={'ve-stage-layer '+(active?'ve-selected-layer':'')} src={asset.url} style={position} alt={asset.name}/>;
+     if(clip.kind==='image')return clip.chromaKey?
+      <ChromaLayer key={clip.id} clip={clip} sourceUrl={asset.url} playing={playing} stageSize={size} style={position} selected={active} {...common}/>:
+      <img key={clip.id} {...common} className={'ve-stage-layer '+(active?'ve-selected-layer':'')} src={asset.url} style={position} alt={asset.name}/>;
      const audioOnly=clip.trackId.startsWith('A')||clip.kind==='audio';
-     return <video key={clip.id} ref={el=>{if(el)nodes.current.set(clip.id,el);else nodes.current.delete(clip.id)}}
-      {...common}
-      onLoadedMetadata={e=>{const el=e.currentTarget;if(Math.abs(el.currentTime-(clip.inPoint+(time-clip.start)*clip.speed))>.2)el.currentTime=Math.max(0,clip.inPoint+(time-clip.start)*clip.speed);if(playing)el.play().catch(()=>{})}}
-      src={asset.url} playsInline preload="auto" controls={false} className={'ve-stage-layer '+(audioOnly?'ve-hidden-audio ':'')+(active?'ve-selected-layer':'')} style={position}/>;
+     const keyed=Boolean(clip.chromaKey&&!audioOnly);
+     return <React.Fragment key={clip.id}>
+      <video ref={el=>{if(el)nodes.current.set(clip.id,el);else nodes.current.delete(clip.id)}}
+       {...(keyed?{}:common)}
+       onLoadedMetadata={e=>{const el=e.currentTarget;if(Math.abs(el.currentTime-(clip.inPoint+(time-clip.start)*clip.speed))>.2)el.currentTime=Math.max(0,clip.inPoint+(time-clip.start)*clip.speed);if(playing)el.play().catch(()=>{})}}
+       src={asset.url} playsInline preload="auto" controls={false} className={'ve-stage-layer '+(audioOnly||keyed?'ve-hidden-audio ':'')+(active?'ve-selected-layer':'')} style={keyed?{display:'none'}:position}/>
+      {keyed&&<ChromaLayer clip={clip} sourceUrl={asset.url} getMedia={()=>nodes.current.get(clip.id)}
+       playing={playing} stageSize={size} style={position} selected={active} {...common}/>}
+     </React.Fragment>;
     })}
     {!visible.some(c=>c.kind!=='audio'&&!c.trackId.startsWith('A'))&&<div className="ve-empty-stage">{clips.length?'No visual clips at this time':'Drag videos onto the timeline to start editing'}</div>}
    </div>
