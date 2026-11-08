@@ -4,6 +4,7 @@
 import {activeClips,clipEnd,timelineDuration,transitionProgress} from './editorCore.js';
 import {resolvedClip,visualClipOpacity,risingTextPosition} from './editorMotion.js';
 import {renderKeyedImage} from './editorChroma.js';
+import {cropMargins} from './editorEnhancements.js';
 
 const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
 const round=n=>Math.round(n*100)/100;
@@ -166,6 +167,15 @@ async function paintFrame(ctx,clips,assetsById,nodes,time,width,height,chromaCac
   ctx.rotate((clip.rotation||0)*Math.PI/180);
   ctx.scale(clip.scale||1,clip.scale||1);ctx.translate(-width/2,-height/2);
   ctx.filter='brightness('+(clip.brightness??1)+') contrast('+(clip.contrast??1)+') saturate('+(clip.saturation??1)+') hue-rotate('+(clip.hueRotate??0)+'deg) blur('+(clip.blur??0)+'px)';
+ if(clip.kind==='video'||clip.kind==='image'){
+  const crop=cropMargins(clip);
+  if(crop.left||crop.right||crop.top||crop.bottom){
+   ctx.beginPath();
+   ctx.rect(width*crop.left/100,height*crop.top/100,
+    width*(100-crop.left-crop.right)/100,height*(100-crop.top-crop.bottom)/100);
+   ctx.clip();
+  }
+ }
   if(clip.kind==='text')drawCaption(ctx,clip,width,height,time);
   else if(node){
    if(clip.chromaKey){
