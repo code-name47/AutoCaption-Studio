@@ -1,7 +1,21 @@
 // Pure timeline animation and overlap model shared by preview and exported video.
-import {clipEnd,renderOpacity} from './editorCore.js';
+import {clipEnd,renderOpacity,transitionProgress} from './editorCore.js';
 export const MOTION_FIELDS=['offsetX','offsetY','scale','rotation','opacity','fontSize','positionY','volume','brightness','contrast','saturation','fontWeight','fontColor','fontFamily','text'];
 export const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+/** Rise captions from below the bottom edge, then drift gently upward like credits.
+ * Shared by interactive preview and browser export to ensure identical motion. */
+export function risingTextPosition(clip,time){
+ const final=Number.isFinite(clip.positionY)?clip.positionY:80;
+ if(clip.kind!=='text'||clip.transitionIn!=='rise')return final;
+ const elapsed=Math.max(0,time-clip.start);
+ const length=Math.max(.1,clipEnd(clip)-clip.start);
+ const intro=Math.min(length,Math.max(.1,Number(clip.transitionDuration)||.4));
+ const eased=1-Math.pow(1-transitionProgress(clip,time),3);
+ const drift=clamp((elapsed-intro)/Math.max(.1,length-intro),0,1);
+ const target=final-3*drift;
+ const from=Math.max(104,final+24);
+ return from+(target-from)*eased;
+}
 export const captureMotion=c=>Object.fromEntries(MOTION_FIELDS.map(key=>[key,typeof c?.[key]==='string'?c[key]:Number(c?.[key]??(key==='scale'||key==='opacity'||key==='volume'||key==='brightness'||key==='contrast'||key==='saturation'?1:0))]));
 const overlapCache=new WeakMap();
 export function overlaps(clips){
