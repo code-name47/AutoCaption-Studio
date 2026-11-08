@@ -256,3 +256,34 @@ body.ve-is-resizing,body.ve-is-resizing *{
  .ve-panel-splitter-horizontal{height:8px;flex-basis:8px}
  .ve-top-actions button[title="Reset editor panel sizes"]{display:none}
 }
+
+/* Approval-gated AI editing. The timeline stays visible during every action. */
+.ve-ai-top-indicator{border-color:#7480dd!important;color:#dedcff!important;background:#28335a!important}
+.ve-ai-connected{background:#132e2e;border:1px solid #356c6e;border-radius:8px;color:#99dfc5;margin:8px 0;padding:8px 10px;font-size:12px}
+.ve-ai-review{
+ position:fixed;bottom:47px;right:18px;width:min(380px,calc(100vw - 36px));
+ max-height:min(65vh,570px);display:flex;flex-direction:column;
+ color:#e4ebfc;background:rgba(16,26,45,.97);border:1px solid #7584c7;
+ border-radius:14px;box-shadow:0 15px 65px #000b,0 0 0 1px #28385a;
+ z-index:300;overflow:auto;scrollbar-width:thin;scrollbar-color:#657395 #101a2b;
+ backdrop-filter:blur(14px);
+}
+.ve-ai-review-head{display:flex;align-items:center;gap:9px;min-height:43px;padding:9px 13px;border-bottom:1px solid #3e5074;background:#202b49}
+.ve-ai-review-head strong{font-size:12px;flex:1}
+.ve-ai-review-head button{font-size:20px;border:0;background:transparent;padding:0 5px}
+.ve-ai-light{width:9px;height:9px;border-radius:50%;background:#a3aaff;box-shadow:0 0 11px #9690ff}
+.ve-ai-summary{font-weight:650;font-size:13px;line-height:1.45;margin:13px 14px 6px;overflow-wrap:anywhere}
+.ve-ai-explain{color:#a7b7d7;font-size:11px;line-height:1.55;margin:3px 14px 9px}
+.ve-ai-steps{padding:9px 9px 9px 35px;margin:0 13px 12px 0;max-height:190px;overflow-y:auto;background:#0e192d;border:1px solid #2b3954;border-radius:7px}
+.ve-ai-steps li{font-size:11px;margin:5px 0;padding-left:3px;overflow-wrap:anywhere}
+.ve-ai-review-actions{display:flex;gap:10px;padding:0 14px 14px;justify-content:flex-start}
+.ve-ai-review-actions button{font-weight:600;min-width:90px}
+.ve-ai-live{padding-bottom:15px}
+.ve-ai-live small{display:block;color:#9eafcb;margin:8px 14px 0}
+.ve-ai-progress{height:8px;border:1px solid #455378;border-radius:9px;background:#131e31;overflow:hidden;margin:8px 14px}
+.ve-ai-progress span{height:100%;display:block;transition:width .35s ease;background:#8984ec;border-radius:9px}
+.ve-ai-error{color:#ffbfbf;background:#411f31;border-top:1px solid #87475b;padding:9px 14px;margin:0;font-size:11px;overflow-wrap:anywhere}
+.ve-ai-review>button{margin:0 14px 14px;width:fit-content}
+.ve-ai-busy .ve-main,.ve-ai-busy>.ve-timeline,.ve-ai-busy>.ve-panel-splitter{pointer-events:none}
+.ve-ai-busy .ve-playhead{filter:drop-shadow(0 0 8px #e8cc92)}
+@media(max-width:600px){.ve-ai-review{bottom:30px;right:8px;width:calc(100vw - 16px);max-height:55vh}}
