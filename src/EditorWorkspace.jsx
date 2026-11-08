@@ -15,6 +15,7 @@ import {renderProjectToWebM} from './editorExport.js';
 import {makeMediaThumbnail} from './mediaThumbnails.js';
 import {captureVisualReview,reviewTimelineNotes} from './editorVisualReview.js';
 import {captureMotion,newMotionClip} from './editorMotion.js';
+import {detachAudioFromVideo,splitStereoAudio,rippleDelete,applyAudioPreset} from './editorEnhancements.js';
 import './editorWorkspace.css';
 
 const uid=()=>globalThis.crypto?.randomUUID?.()||'id-'+Math.random().toString(36).slice(2);
@@ -90,7 +91,7 @@ export default function EditorWorkspace(){
  [assets,setAssets]=useState([]),[clips,setClips]=useState([]),[selectedId,setSelectedId]=useState(''),[selectedAssetId,setSelectedAssetId]=useState(''),
  [sourceViewer,setSourceViewer]=useState(false),[time,setTime]=useState(0),[playing,setPlaying]=useState(false),
  [zoom,setZoom]=useState(36),[viewZoom,setViewZoom]=useState(70),[panelLayout,setPanelLayout]=useState(loadPanelLayout),[timelineExpanded,setTimelineExpanded]=useState(false),[tab,setTab]=useState('media'),[inspectorOpen,setInspectorOpen]=useState(true),
- [trackMuted,setTrackMuted]=useState({}),[status,setStatus]=useState('Ready'),[busy,setBusy]=useState(false),
+ [trackMuted,setTrackMuted]=useState({}),[trackSolo,setTrackSolo]=useState({}),[status,setStatus]=useState('Ready'),[busy,setBusy]=useState(false),
  [model,setModel]=useState('tiny'),[googleAccount,setGoogleAccount]=useState(''),[bridgeToken,setBridgeToken]=useState(''),
  [rendering,setRendering]=useState(false),[renderProgress,setRenderProgress]=useState(0),[historyVersion,setHistoryVersion]=useState(0),[recordingTrackId,setRecordingTrackId]=useState(''),[visualReviewBusy,setVisualReviewBusy]=useState(false),[visualReviewInfo,setVisualReviewInfo]=useState(null),[showCaptionAudit,setShowCaptionAudit]=useState(false);
  const editorMain=useRef(null),beforeExpand=useRef(null),input=useRef(null),audioInput=useRef(null),assetRef=useRef([]),fileImportActive=useRef(false),transcriptionWorker=useRef(null);
@@ -208,6 +209,66 @@ export default function EditorWorkspace(){
   if(affected.length&&!window.confirm('Remove '+trackId+' and all '+affected.length+' clips on it?'))return;
   if(recording.current?.trackId===trackId)stopRecording();
   record();setTracks(ts=>ts.filter(t=>t.id!==trackId));setClips(cs=>cs.filter(c=>c.trackId!==trackId));note(trackId+' removed');
+ }
+
+ function detachAudio(id){
+  const source=clipsRef.current.find(c=>c.id===id);
+  if(!source||source.kind!=='video'||source.trackId.startsWith('A')){note('Select a video clip on a video track.');return}
+  if(clipsRef.current.some(c=>c.linkedSourceId===id&&c.kind==='audio')){
+   note('Audio is already detached for this clip.');return
+  }
+  let trackId=tracks.find(t=>t.kind==='audio')?.id;
+  if(!trackId){
+   trackId='A1';setTracks(ts=>[...ts,{id:trackId,label:'Audio 1',kind:'audio',z:0}]);
+  }
+  const audioId=uid();
+  try{
+   const result=detachAudioFromVideo(clipsRef.current,id,audioId,trackId);
+   record();setClips(result.clips);setSelectedId(audioId);setSourceViewer(false);
+   note('Detached audio to '+trackId+'; the original picture stays aligned and silent.');
+  }catch(e){note(e.message)}
+ }
+ async function separateStereoChannels(id){
+  const source=clipsRef.current.find(c=>c.id===id);
+  if(!source||source.kind!=='audio'){note('Detach the audio from a video clip, or select an audio clip first.');return}
+  const asset=assets.find(a=>a.id===source.assetId);
+  if(!asset?.file){note('Original audio is missing. Reopen or import the media.');return}
+  if(asset.file.size>80*1024*1024){note('This file exceeds the 80 MB channel-inspection limit. Use a smaller audio file.');return}
+  if(busy)return;
+  setBusy(true);
+  try{
+   const Ctx=window.AudioContext||window.webkitAudioContext;
+   if(!Ctx)throw Error('Audio decoding is unavailable in this browser.');
+   const ctx=new Ctx();let channels;
+   try{channels=(await ctx.decodeAudioData(await asset.file.arrayBuffer())).numberOfChannels}
+   catch{throw Error('This browser could not decode stereo channel information from this media. Try importing its audio as WAV or AAC.')}
+   finally{await ctx.close().catch(()=>{})}
+   if(channels<2)throw Error('The selected recording is mono. It has no separate left and right channels.');
+   let first=tracks.find(t=>t.kind==='audio')?.id||'A1';
+   let second=tracks.filter(t=>t.kind==='audio'&&t.id!==first)[0]?.id;
+   if(!second){
+    const number=tracks.reduce((m,t)=>t.id.startsWith('A')?Math.max(m,Number(t.id.slice(1))):m,0)+1;
+    if(number>12)throw Error('Create a second audio track after removing an unused track.');
+    second='A'+number;
+    setTracks(ts=>[...ts,{id:second,label:'Audio '+number,kind:'audio',z:0}]);
+   }
+   const result=splitStereoAudio(clipsRef.current,id,uid(),uid(),first,second);
+   record();setClips(result.clips);setSelectedId(result.leftId);setPlaying(false);
+   note('Split true stereo left and right into '+first+' and '+second+'. Their channels are isolated in preview and export.');
+  }catch(e){note(e.message)}
+  finally{setBusy(false)}
+ }
+ function rippleRemove(id){
+  try{const updated=rippleDelete(clipsRef.current,id);
+   record();setClips(updated);setSelectedId('');setPlaying(false);
+   note('Ripple removed clip and shifted subsequent clips earlier.');
+  }catch(e){note(e.message)}
+ }
+ function audioPreset(id,preset){
+  try{const next=applyAudioPreset(clipsRef.current.find(c=>c.id===id),preset);
+   updateClip(id,{eqLow:next.eqLow,eqMid:next.eqMid,eqHigh:next.eqHigh,volume:next.volume,pan:next.pan??0});
+   note('Applied '+preset+' audio mix preset.');
+  }catch(e){note(e.message)}
  }
  function placeAsset(assetId,trackId,at){
   const a=assets.find(x=>x.id===assetId);
@@ -359,7 +420,7 @@ export default function EditorWorkspace(){
  }
  async function saveProject(){
   if(busy||rendering)return;setBusy(true);note('Saving project and media to this browser…');
-  try{const metadata=serializeProject(name,assets,clips,{...settings,tracks,trackMuted});await saveBrowserProject(metadata,assets);note('Project saved in this browser. It is not uploaded to the cloud.')}
+  try{const metadata=serializeProject(name,assets,clips,{...settings,tracks,trackMuted,trackSolo});await saveBrowserProject(metadata,assets);note('Project saved in this browser. It is not uploaded to the cloud.')}
   catch(e){note('Save failed: '+(e?.name==='QuotaExceededError'?'Browser storage quota exceeded. Try a smaller project.':e.message))}finally{setBusy(false)}
  }
  async function loadProject(){
@@ -370,7 +431,7 @@ export default function EditorWorkspace(){
    setAssets(p.assets);populateThumbnails(p.assets.filter(a=>a.url));setClips(p.clips);setName(p.name);
    setSettings({aspect:p.settings?.aspect||'16:9',fps:Number(p.settings?.fps)||30});
    setTracks(Array.isArray(p.settings?.tracks)&&p.settings.tracks.length?p.settings.tracks:TRACKS);
-   setTrackMuted(p.settings?.trackMuted||{});
+   setTrackMuted(p.settings?.trackMuted||{});setTrackSolo(p.settings?.trackSolo||{});
    setSelectedId('');setSelectedAssetId('');setSourceViewer(false);setRecordingTrackId('');recording.current=null;setTime(0);timeRef.current=0;past.current=[];future.current=[];
    note('Saved project loaded'+(p.assets.some(x=>x.missing)?'. Some media must be reimported.':'.'));
   }catch(e){note('Could not load project: '+e.message)}finally{setBusy(false)}
@@ -383,7 +444,7 @@ export default function EditorWorkspace(){
  async function exportWebm(){
   if(rendering||!clips.some(c=>['video','image','text'].includes(c.kind))){note('Add visual clips to the timeline before exporting.');return}
   setPlaying(false);setRendering(true);setRenderProgress(0);note('Preparing WebM render. Keep this tab open.');
-  try{const blob=await renderProjectToWebM({assets,clips,settings,trackMuted,onProgress:p=>setRenderProgress(p)});
+  try{const blob=await renderProjectToWebM({assets,clips,settings,trackMuted,trackSolo,onProgress:p=>setRenderProgress(p)});
    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name.replace(/[^a-z0-9_-]+/gi,'_')+'.webm';a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
    note('WebM video rendered. Verify audio and transitions before sharing.');
   }catch(e){note('WebM export failed: '+e.message)}finally{setRendering(false)}
@@ -398,6 +459,7 @@ export default function EditorWorkspace(){
  const keysRef=useRef(null);keysRef.current=handleShortcut;
  useEffect(()=>{const listener=e=>keysRef.current?.(e);window.addEventListener('keydown',listener);return()=>window.removeEventListener('keydown',listener)},[]);
  const trackMute=t=>setTrackMuted(m=>({...m,[t]:!m[t]}));
+ const trackSoloToggle=t=>setTrackSolo(m=>({...m,[t]:!m[t]}));
  const aiProject=useMemo(()=>editorProjectSnapshot({name,assets,clips,settings,tracks}),[name,assets,clips,settings,tracks]);
  // ChatGPT can request transcription by asset ID. The audio never leaves this
  // browser: local Whisper returns only the timestamped dialogue to the bridge.
@@ -538,15 +600,15 @@ export default function EditorWorkspace(){
   <span>{settings.fps} fps</span><button onClick={()=>setSourceViewer(false)} disabled={!sourceViewer}>Timeline preview</button></div>
      <div className="ve-monitor-area">{sourceViewer&&selectedAsset?.url?
        (selectedAsset.kind==='image'?<img className="ve-source-player" alt={selectedAsset.name} src={selectedAsset.url}/>:selectedAsset.kind==='audio'?<audio className="ve-source-audio" src={selectedAsset.url} controls/>:<video key={selectedAsset.id} className="ve-source-player" controls src={selectedAsset.url}/>)
-       :<EditorPreview assets={assets} clips={clips} time={time} playing={playing} selectedId={selectedId} onSelect={id=>{setSelectedId(id);const clip=clips.find(c=>c.id===id);if(clip?.assetId)setSelectedAssetId(clip.assetId);setSourceViewer(false)}} aspect={settings.aspect} viewZoom={viewZoom} trackMuted={trackMuted} onTransformStart={transformStart} onTransform={transformLive} onTransformEnd={()=>{}}/>}
+       :<EditorPreview assets={assets} clips={clips} time={time} playing={playing} selectedId={selectedId} onSelect={id=>{setSelectedId(id);const clip=clips.find(c=>c.id===id);if(clip?.assetId)setSelectedAssetId(clip.assetId);setSourceViewer(false)}} aspect={settings.aspect} viewZoom={viewZoom} trackMuted={trackMuted} trackSolo={trackSolo} onTransformStart={transformStart} onTransform={transformLive} onTransformEnd={()=>{}}/>}
      </div><div className="ve-transport"><button onClick={()=>seek(0)} title="Go to start">⏮</button><button className="ve-play" onClick={togglePlay}>{playing?'❚❚':'▶'}</button><button onClick={()=>seek(Math.min(length,time+5))} title="Skip 5 seconds">⏭</button><span>{timeLabel(time)} / {timeLabel(length)}</span><div className="ve-transport-fill"/><span className="ve-status-mini">{playing?'PLAY':'EDIT'}</span></div>
    </section>
    {inspectorOpen&&<PanelSplitter label="Resize Inspector panel" value={panelLayout.inspector} min={220} max={700} onResize={resizeInspector} onReset={()=>setPanelLayout(p=>({...p,inspector:280}))}/>}
-   {inspectorOpen&&<EditorInspector clip={currentClip} asset={currentAsset} settings={settings} onSettings={setSettings} onPatch={updateClip} onTransition={transition} onSplit={split} onDelete={removeClip} time={time}/>}
+   {inspectorOpen&&<EditorInspector clip={currentClip} asset={currentAsset} settings={settings} onSettings={setSettings} onPatch={updateClip} onTransition={transition} onSplit={split} onDelete={removeClip} onDetachAudio={detachAudio} onSplitStereo={separateStereoChannels} onRippleDelete={rippleRemove} onAudioPreset={audioPreset} time={time}/>}
    <button className="ve-inspector-toggle" onClick={()=>setInspectorOpen(v=>!v)} title={inspectorOpen?'Hide inspector':'Show inspector'}>{inspectorOpen?'›':'‹'}</button>
   </div>
   <PanelSplitter axis="horizontal" label="Resize timeline height" value={panelLayout.timeline} min={200} max={850} onResize={resizeTimeline} onReset={()=>{setTimelineExpanded(false);setPanelLayout(p=>({...p,timeline:freshPanelLayout().timeline}))}}/>
-  <EditorTimeline panelHeight={panelLayout.timeline} expanded={timelineExpanded} onToggleExpanded={toggleTimelineSize} tracks={tracks} clips={clips} assets={assets} time={time} zoom={zoom} setZoom={setZoom} onSeek={seek} onSelect={id=>{setSelectedId(id);setSourceViewer(false);const item=clipsRef.current.find(c=>c.id===id);if(item&&item.kind!=='motion'&&(timeRef.current<item.start||timeRef.current>=clipEnd(item))){timeRef.current=item.start+.01;setTime(timeRef.current);setPlaying(false)}}} selectedId={selectedId} onPlace={placeAsset} onMove={moveClip} onTrim={trim} onTrimStart={record} onTransition={transition} onRemove={removeClip} onSplit={split} onDuplicate={duplicateClip} onAddTitle={trackId=>addTitle("New text",trackId,3)} onPatch={updateClip} onAddTrack={addTrack} onRemoveTrack={removeTrack} trackMuted={trackMuted} onToggleTrackMute={trackMute} recordingTrackId={recordingTrackId} onToggleRecord={toggleRecord} onOpenInspector={id=>{setSelectedId(id);setInspectorOpen(true)}}/>
+  <EditorTimeline panelHeight={panelLayout.timeline} expanded={timelineExpanded} onToggleExpanded={toggleTimelineSize} tracks={tracks} clips={clips} assets={assets} time={time} zoom={zoom} setZoom={setZoom} onSeek={seek} onSelect={id=>{setSelectedId(id);setSourceViewer(false);const item=clipsRef.current.find(c=>c.id===id);if(item&&item.kind!=='motion'&&(timeRef.current<item.start||timeRef.current>=clipEnd(item))){timeRef.current=item.start+.01;setTime(timeRef.current);setPlaying(false)}}} selectedId={selectedId} onPlace={placeAsset} onMove={moveClip} onTrim={trim} onTrimStart={record} onTransition={transition} onRemove={removeClip} onSplit={split} onDuplicate={duplicateClip} onDetachAudio={detachAudio} onSplitStereo={separateStereoChannels} onRippleDelete={rippleRemove} onAddTitle={trackId=>addTitle("New text",trackId,3)} onPatch={updateClip} onAddTrack={addTrack} onRemoveTrack={removeTrack} trackMuted={trackMuted} trackSolo={trackSolo} onToggleTrackMute={trackMute} onToggleTrackSolo={trackSoloToggle} recordingTrackId={recordingTrackId} onToggleRecord={toggleRecord} onOpenInspector={id=>{setSelectedId(id);setInspectorOpen(true)}}/>
   <AIReviewPanel review={shownAI.review} applying={shownAI.applying} progress={shownAI.progress} recent={shownAI.recent} error={shownAI.error}
     onApprove={shownAI.approve} onReject={shownAI.reject} onRevert={shownAI.revert} onDismiss={shownAI.dismiss}/>
   <input ref={input} type="file" multiple hidden accept="video/*,audio/*,image/*" onChange={e=>{importFiles(e.target.files);e.target.value=''}}/>
