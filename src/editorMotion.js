@@ -1,5 +1,5 @@
 // Pure timeline animation and overlap model shared by preview and exported video.
-import {clipEnd,clipLength} from './editorCore.js';
+import {clipEnd,renderOpacity} from './editorCore.js';
 export const MOTION_FIELDS=['offsetX','offsetY','scale','rotation','opacity','fontSize','positionY','volume','brightness','contrast','saturation'];
 export const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export const captureMotion=c=>Object.fromEntries(MOTION_FIELDS.map(key=>[key,Number(c?.[key]??(key==='scale'||key==='opacity'||key==='volume'||key==='brightness'||key==='contrast'||key==='saturation'?1:0))]));
@@ -69,4 +69,21 @@ export function newMotionClip({id,trackId,targetClipId,start,end,keyframes}){
  return {id,trackId,targetClipId,assetId:null,kind:'motion',start:Math.max(0,start),
   inPoint:0,outPoint:duration,speed:1,transitionIn:'none',transitionDuration:0,
   keyframes:keyframes.map(k=>({t:clamp(k.t,0,duration),values:{...k.values}}))};
+}
+
+export function visualClipOpacity(clip,clips,time){
+ const auto=overlapFor(clip,clips,time);
+ const fadeEnd=clip.fadeOut>0?clamp((clipEnd(clip)-time)/clip.fadeOut,0,1):1;
+ const base=auto?.incomingId===clip.id&&clip.transitionIn==='crossfade'
+  ?clamp((clip.opacity??1)*fadeEnd,0,1)
+  :renderOpacity(clip,time);
+ return clamp(base*visualOverlapFactor(clip,clips,time),0,1);
+}
+export function audioClipGain(clip,clips,time){
+ const auto=overlapFor(clip,clips,time);
+ const fadeEnd=clip.fadeOut>0?clamp((clipEnd(clip)-time)/clip.fadeOut,0,1):1;
+ const base=auto?.incomingId===clip.id&&clip.transitionIn==='crossfade'
+  ?clamp((clip.opacity??1)*fadeEnd,0,1)
+  :renderOpacity(clip,time);
+ return clip.muted?0:clamp((clip.volume??1)*base*audioOverlapFactor(clip,clips,time),0,1);
 }
