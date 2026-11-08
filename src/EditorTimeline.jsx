@@ -10,6 +10,20 @@ export default function EditorTimeline({
  panelHeight=335,expanded=false,onToggleExpanded
 }){
  const [dragHint,setDragHint]=useState(''),[menu,setMenu]=useState(null);
+ const [labelWidth,setLabelWidth]=useState(()=>{
+  try{return Math.max(96,Math.min(440,Number(window.localStorage.getItem('acs_track_label_width'))||116))}catch{return 116}
+ });
+ const resizeRef=useRef(null);
+ useEffect(()=>{try{window.localStorage.setItem('acs_track_label_width',String(labelWidth))}catch{}},[labelWidth]);
+ function beginLabelResize(e){if(e.button!==0)return;e.preventDefault();e.stopPropagation();
+  resizeRef.current={startX:e.clientX,width:labelWidth};e.currentTarget.setPointerCapture(e.pointerId);
+ }
+ function moveLabelResize(e){if(!resizeRef.current)return;
+  setLabelWidth(Math.max(96,Math.min(440,resizeRef.current.width+e.clientX-resizeRef.current.startX)));
+ }
+ function endLabelResize(e){resizeRef.current=null;
+  if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
+ }
  const trimRef=useRef(null),scrubRef=useRef(null),scroller=useRef(null),rulerRef=useRef(null);
  const transitions=useMemo(()=>overlaps(clips),[clips]);
  const total=Math.max(30,...clips.map(c=>clipEnd(c)+5));
@@ -63,7 +77,7 @@ export default function EditorTimeline({
 
  const action=(fn)=>()=>{setMenu(null);fn()};
  const menuButton=(name,fn)=> <button role="menuitem" key={name} onClick={action(fn)}>{name}</button>;
- return <div className={"ve-timeline"+(expanded?" ve-expanded":"")} style={{'--ve-timeline-height':panelHeight+'px'}}>
+ return <div className={"ve-timeline"+(expanded?" ve-expanded":"")} style={{'--ve-timeline-height':panelHeight+'px','--ve-track-label-width':labelWidth+'px'}}>
   <header className="ve-timeline-tools">
    <div className="ve-timeline-heading"><strong>Timeline</strong><span>{tracks.length} tracks</span></div>
    <button onClick={()=>onAddTrack('video')} title="Create video track">+ Video track</button>
@@ -75,8 +89,16 @@ export default function EditorTimeline({
    <button title={expanded?"Reduce timeline height":"Expand timeline height"} onClick={onToggleExpanded}>{expanded?"▤":"▣"}</button><button title="Fit timeline" onClick={()=>{const viewport=scroller.current?.clientWidth||1000;setZoom(Math.max(14,Math.min(120,(viewport-180)/Math.max(10,total))))}}>Fit</button>
   </header>
   <div className="ve-timeline-scroll" ref={scroller}>
-   <div className="ve-timeline-body" style={{width:width+116}}>
-    <div className="ve-ruler-row"><div className="ve-ruler-label">TIME</div>
+   <div className="ve-timeline-body" style={{width:width+labelWidth}}>
+    <div className="ve-ruler-row"><div className="ve-ruler-label">TIME
+     <div className="ve-track-label-resizer" role="separator" aria-label="Resize timeline track-name column" title="Drag left or right to resize track names; double-click to reset" tabIndex={0}
+      aria-valuenow={labelWidth} aria-valuemin={96} aria-valuemax={440}
+      onPointerDown={beginLabelResize} onPointerMove={moveLabelResize} onPointerUp={endLabelResize} onPointerCancel={endLabelResize}
+      onDoubleClick={e=>{e.stopPropagation();setLabelWidth(116)}} onKeyDown={e=>{
+       if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();setLabelWidth(n=>Math.max(96,Math.min(440,n+(e.key==='ArrowLeft'?-1:1)*(e.shiftKey?24:8))))}
+       if(e.key==='Home'){e.preventDefault();setLabelWidth(96)}
+      }}/>
+     </div>
      <div className="ve-ruler" ref={rulerRef} style={{width}} onPointerDown={startScrubbing} onPointerMove={moveScrubbing} onPointerUp={stopScrubbing} onPointerCancel={stopScrubbing} onDragStart={e=>e.preventDefault()}>
       {marks.map(n=><span className="ve-ruler-mark" style={{left:n*zoom}} key={n}>{CLOCK(n)}</span>)}
       <div className="ve-ruler-playhead" aria-label="Drag timeline playhead" data-testid="playhead-handle"
@@ -120,9 +142,9 @@ export default function EditorTimeline({
          onContextMenu={e=>showContext(e,track.id,o.incomingId,o.id)}>↔</div>)}
       </div>
      </div>)}
-     <div className="ve-playhead" style={{left:116+time*zoom}} aria-hidden="true"/>
+     <div className="ve-playhead" style={{left:labelWidth+time*zoom}} aria-hidden="true"/>
      <div className="ve-playhead-grab" role="slider" aria-label="Scrub timeline playhead" aria-valuemin={0} aria-valuemax={Math.max(1,total)} aria-valuenow={Math.round(time*100)/100}
-      tabIndex={0} style={{left:116+time*zoom}}
+      tabIndex={0} style={{left:labelWidth+time*zoom}}
       onPointerDown={startScrubbing} onPointerMove={moveScrubbing} onPointerUp={stopScrubbing} onPointerCancel={stopScrubbing}
       onKeyDown={e=>{if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();onSeek(Math.max(0,time+(e.key==='ArrowLeft'?-1:1)*(e.shiftKey?1:.1)))}}}>
       <span aria-hidden="true"/>
