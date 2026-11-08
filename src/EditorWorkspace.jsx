@@ -176,6 +176,34 @@ export default function EditorWorkspace(){
    note('Transcribed '+asset.name+'. Add captions to the subtitle track.');
   }catch(e){note(e.message)}finally{transcriptionWorker.current?.terminate();transcriptionWorker.current=null;setBusy(false)}
  }
+ async function transcribeAll(){
+  if(busy)return;
+  const queue=assets.filter(a=>a.file&&['video','audio'].includes(a.kind)&&!(a.transcript?.length));
+  if(!queue.length){note('No untranscribed project videos found.');return}
+  const worker=new Worker(new URL('./transcription.worker.js',import.meta.url),{type:'module'});
+  transcriptionWorker.current=worker;setBusy(true);
+  let succeeded=0;const failed=[];
+  try{
+   for(let index=0;index<queue.length;index++){
+    const item=queue[index],prefix=(index+1)+'/'+queue.length+' · '+item.name+' — ';
+    try{
+     note(prefix+'decoding audio…');
+     const audio=await decodeMediaToMono16k(item.file,message=>note(prefix+message));
+     const transcript=await new Promise((resolve,reject)=>{
+      worker.onerror=()=>reject(Error('Whisper worker failed'));
+      worker.onmessage=e=>{const m=e.data;if(m.type==='loading')note(prefix+'loading '+m.model+' model…');
+       if(m.type==='processing')note(prefix+'transcribing…');
+       if(m.type==='error')reject(Error(m.message));
+       if(m.type==='complete')resolve(m.result)};
+      worker.postMessage({type:'transcribe',model,audio:audio.buffer},[audio.buffer]);
+     });
+     const segments=transcript.segments?.length?transcript.segments:[{start:0,end:item.duration,text:transcript.text||''}];
+     setAssets(all=>all.map(a=>a.id===item.id?{...a,transcript:segments}:a));succeeded++;
+    }catch(e){failed.push(item.name+' ('+e.message+')');}
+   }
+   note('Batch completed: '+succeeded+'/'+queue.length+' videos transcribed'+(failed.length?'. Failed: '+failed.slice(0,3).join('; '):'.'));
+  }finally{worker.terminate();if(transcriptionWorker.current===worker)transcriptionWorker.current=null;setBusy(false)}
+ }
  function addCaptionsFromAsset(){
   const asset=selectedAsset||currentAsset;
   if(!asset?.transcript?.length){note('Transcribe a selected media file first.');return}
@@ -268,6 +296,7 @@ export default function EditorWorkspace(){
       <p className="ve-selected-name">{(selectedAsset||currentAsset)?.name||'No file selected'}</p>
       <label className="ve-stacked-field"><span>Model</span><select value={model} disabled={busy} onChange={e=>setModel(e.target.value)}><option value="tiny">Whisper Tiny (fastest)</option><option value="base">Whisper Base</option><option value="small">Whisper Small (slower)</option></select></label>
       <button className="ve-wide-btn ve-accent-btn" disabled={busy||!((selectedAsset||currentAsset)?.file)} onClick={transcribeSelected}>{busy?'Working…':'Transcribe selected media'}</button>
+      <button className="ve-wide-btn" disabled={busy||!assets.some(a=>['video','audio'].includes(a.kind)&&!a.transcript?.length)} onClick={transcribeAll}>Transcribe all project videos</button>
       <button className="ve-wide-btn" onClick={addCaptionsFromAsset} disabled={!(selectedAsset||currentAsset)?.transcript?.length}>Place subtitles on C1 track</button>
       <p className="ve-note">You can trim and edit each subtitle on the timeline and in the inspector.</p>
     </>}
