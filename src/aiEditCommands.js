@@ -116,6 +116,23 @@ export function applyEditorAction(project,action){
   updated=copy(p,{clips:p.clips.filter(x=>x.id!==c.id)});
   description='Remove '+c.id;focus=c.start;selectedId='';break;
  }
+ case 'style_captions':{
+  failExtra(a,['type','font_size','last_font_size','position_y','rise_duration']);
+  assert(finite(a.font_size,20,80),'Caption font size must be 20–80');
+  assert(finite(a.last_font_size,20,90),'Closing caption font size must be 20–90');
+  assert(finite(a.position_y,60,92),'Caption position must be 60–92%');
+  assert(finite(a.rise_duration,.1,1),'Caption rise duration must be 0.1–1 seconds');
+  const captions=p.clips.filter(c=>c.kind==='text'&&c.trackId==='C1');
+  assert(captions.length>0,'No captions are present on C1');
+  const last=captions.reduce((latest,c)=>c.start>latest.start?c:latest,captions[0]);
+  updated=copy(p,{clips:p.clips.map(c=>c.kind==='text'&&c.trackId==='C1'?{
+   ...c,fontSize:c.id===last.id?a.last_font_size:a.font_size,
+   positionY:a.position_y,transitionIn:'rise',
+   transitionDuration:roundTime(Math.min(a.rise_duration,clipLength(c)/2))
+  }:c)});
+  description='Enlarge '+captions.length+' captions and animate upward from below';
+  focus=0;selectedId=last.id;break;
+ }
  case 'set_transition':{
   failExtra(a,['type','clip_id','transition','duration']);
   const c=clipBy(p,a.clip_id);
@@ -166,5 +183,6 @@ export const EDITOR_ACTION_DESCRIPTION=[
  'add_media: {type,asset_id,start,track_id}',
  'remove_clip: {type,clip_id}',
  'set_transition: {type,clip_id,transition:"none"|"crossfade"|"fade"|"wipe"|"slide"|"rise",duration?}',
+ 'style_captions: {type,font_size,last_font_size,position_y,rise_duration} (styles all C1 captions with credits-style rise)',
  'set_clip_property: {type,clip_id,property,value}'
 ].join('; ');
