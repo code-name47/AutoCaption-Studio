@@ -85,6 +85,7 @@ body.ve-app-mode,body.ve-app-mode #root{height:100dvh;min-height:0;margin:0;over
 .ve-range{display:block;margin:10px 0}.ve-range>span{display:flex;justify-content:space-between;color:#aabbd3;font-size:11px}.ve-range input{display:block;width:100%;accent-color:#8888ec}
 .ve-inspector-toggle{border:0!important;border-left:1px solid #30405b!important;background:#152238!important;border-radius:0!important;padding:0!important;min-width:14px;cursor:pointer}
 .ve-timeline{flex:0 0 clamp(270px,37vh,450px);display:flex;flex-direction:column;min-height:0;background:#0e1727;border-top:1px solid #3b4964;position:relative}
+.ve-timeline.ve-expanded{flex-basis:clamp(330px,62vh,660px)}
 .ve-timeline-tools{flex:0 0 42px;display:flex;align-items:center;gap:7px;padding:4px 13px;border-bottom:1px solid #2b394e;min-width:0}
 .ve-timeline-heading{display:flex;align-items:center;gap:7px;margin-right:12px}.ve-timeline-heading strong{font-size:12px}.ve-timeline-heading span{font-size:11px;color:#8196b8}
 .ve-timeline-spacer{flex:1}.ve-timeline-tools button{padding:5px 9px;font-size:11px}
