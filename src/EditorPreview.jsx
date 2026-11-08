@@ -1,13 +1,11 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {activeClips,clipEnd,renderOpacity,transitionProgress,trackFor} from './editorCore.js';
-import {resolvedClip,visualOverlapFactor,audioOverlapFactor,clamp,captureMotion} from './editorMotion.js';
+import {resolvedClip,visualClipOpacity,audioClipGain,clamp,captureMotion} from './editorMotion.js';
 
 const between=(n,a,b)=>Math.min(b,Math.max(a,n));
 function layerStyle(clip,time,clips){
  const progress=transitionProgress(clip,time);
- const incoming=visualOverlapFactor(clip,clips,time);
- // Automatic overlap dissolves replace manual crossfade to prevent double fading.
- const alpha=renderOpacity(clip,time)*(incoming<1&&clip.transitionIn==='crossfade'?1/Math.max(.001,progress):1)*incoming;
+ const alpha=visualClipOpacity(clip,clips,time);
  const style={opacity:between(alpha,0,1),zIndex:trackFor(clip.trackId)?.z||1,
   transform:'translate('+clip.offsetX+'%, '+clip.offsetY+'%) scale('+clip.scale+') rotate('+clip.rotation+'deg)',
   filter:'brightness('+clip.brightness+') contrast('+clip.contrast+') saturate('+clip.saturation+')'};
@@ -54,9 +52,7 @@ export default function EditorPreview({
    const target=between(clip.inPoint+(time-clip.start)*clip.speed,clip.inPoint,clip.outPoint);
    if(element.readyState>=1&&Math.abs(element.currentTime-target)>.3){try{element.currentTime=target}catch{}}
    element.playbackRate=between(clip.speed,.25,4);
-   const alpha=renderOpacity(clip,time);
-   const fade=audioOverlapFactor(original,clips,time);
-   element.volume=between(trackMuted[clip.trackId]||clip.muted?0:(clip.volume??1)*alpha*fade,0,1);
+   element.volume=trackMuted[clip.trackId]?0:audioClipGain(clip,clips,time);
    if(playing){if(element.paused)element.play().catch(()=>{})}else if(!element.paused)element.pause();
   }
  },[time,playing,visibleIds,clips,assets,trackMuted]);
