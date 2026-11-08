@@ -53,7 +53,7 @@ test('AI cannot mutate unknown objects, properties, or leave the document partia
  assert.throws(()=>previewEditorActions(p,[{type:'set_canvas',aspect:'9:16'},
   {type:'set_clip_property',clip_id:'clip-1',property:'__proto__',value:999}]),/Property is not editable/);
  assert.equal(JSON.stringify(p),copy);
- assert.throws(()=>applyEditorAction(p,{type:'move_clip',clip_id:'clip-1',start:4,track_id:'A1'}),/Incompatible/);
+ assert.throws(()=>applyEditorAction(p,{type:'move_clip',clip_id:'clip-1',start:4,track_id:'T1'}),/Incompatible/);
  assert.throws(()=>applyEditorAction(p,{type:'set_canvas',aspect:'evil'}),/Unsupported/);
  assert.throws(()=>applyEditorAction(p,{type:'remove_clip',clip_id:'missing'}),/not found/);
  assert.throws(()=>applyEditorAction(p,{type:'set_canvas',aspect:'16:9',javascript:'alert(1)'}),/Unexpected/);
