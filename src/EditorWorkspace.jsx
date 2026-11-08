@@ -11,7 +11,7 @@ import useBridgeTranscription from './useBridgeTranscription.js';
 import useLocalAIDemo from './useLocalAIDemo.js';
 import AIReviewPanel from './AIReviewPanel.jsx';
 import {editorProjectSnapshot} from './aiEditCommands.js';
-import {renderProjectToWebM} from './editorExport.js';
+import {renderProjectToWebM,renderProjectToVideo,supportsMp4Export} from './editorExport.js';
 import {makeMediaThumbnail} from './mediaThumbnails.js';
 import {audioPeaksFromFile,recommendedPeakGain} from './mediaWaveform.js';
 import {captureVisualReview,reviewTimelineNotes} from './editorVisualReview.js';
@@ -498,14 +498,15 @@ export default function EditorWorkspace(){
   if(!data.length){note('No subtitles in the C1 track. Transcribe a clip or add a caption first.');return}
   downloadText(formatCaptions(data,ext),name.replace(/[^a-z0-9_-]+/gi,'_')+'.'+ext);note(ext.toUpperCase()+' exported');
  }
- async function exportWebm(){
+ async function exportVideo(format='webm'){
   if(rendering||!clips.some(c=>['video','image','text'].includes(c.kind))){note('Add visual clips to the timeline before exporting.');return}
-  setPlaying(false);setRendering(true);setRenderProgress(0);note('Preparing WebM render. Keep this tab open.');
-  try{const blob=await renderProjectToWebM({assets,clips,settings,trackMuted,trackSolo,onProgress:p=>setRenderProgress(p)});
-   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name.replace(/[^a-z0-9_-]+/gi,'_')+'.webm';a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
-   note('WebM video rendered. Verify audio and transitions before sharing.');
-  }catch(e){note('WebM export failed: '+e.message)}finally{setRendering(false)}
+  setPlaying(false);setRendering(true);setRenderProgress(0);note('Preparing '+format.toUpperCase()+' render. Keep this tab open.');
+  try{const blob=await renderProjectToVideo({assets,clips,settings,trackMuted,trackSolo,format,onProgress:p=>setRenderProgress(p)});
+   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name.replace(/[^a-z0-9_-]+/gi,'_')+'.'+format;a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
+   note(format.toUpperCase()+' video rendered. Verify audio, color keying and transitions before sharing.');
+  }catch(e){note(format.toUpperCase()+' export failed: '+e.message)}finally{setRendering(false)}
  }
+ async function exportWebm(){return exportVideo('webm')}
  function handleShortcut(e){const target=e.target;if(target&&(target.closest('input,textarea,select,[contenteditable="true"]')))return;
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();if(e.shiftKey)redo();else undo();return}
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){e.preventDefault();redo();return}
@@ -620,6 +621,7 @@ export default function EditorWorkspace(){
     </>}
     {tab==='export'&&<><div className="ve-pane-heading"><b>Export & Project</b><small>Browser local</small></div>
       <button className="ve-wide-btn ve-accent-btn" disabled={rendering||busy} onClick={exportWebm}>{rendering?'Rendering '+Math.round(renderProgress*100)+'%':'Render WebM video'}</button>
+      <button className="ve-wide-btn" disabled={rendering||busy||!supportsMp4Export()} onClick={()=>exportVideo('mp4')}>{supportsMp4Export()?'Render MP4 (native browser)':'MP4 unavailable in this browser'}</button>
       {rendering&&<progress className="ve-progress" max="100" value={Math.round(renderProgress*100)}/>}
       <p className="ve-note">WebM export renders in real time in this browser. Keep the tab open; codec, audio, and performance support vary by device. Verify the result.</p>
       <h4>Subtitles</h4><div className="ve-format-row">{['srt','vtt','txt'].map(ext=><button key={ext} onClick={()=>downloadCaptions(ext)}>{ext.toUpperCase()}</button>)}</div>
